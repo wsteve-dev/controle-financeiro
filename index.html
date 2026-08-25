@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caderneta — Controle Financeiro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="brand-glyph">R$</div>
+      <div class="brand-text">
+        <span class="brand-mark">Caderneta</span>
+        <span class="brand-sub">Livro-caixa pessoal</span>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="period-control">
+        <span>Período</span>
+        <select id="mesSel"></select>
+        <select id="anoSel"></select>
+      </div>
+      <button class="menu-btn" id="menuBtn" aria-label="Abrir menu" aria-expanded="false" aria-controls="navDrawer">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================== VIEW: RESUMO ===================== -->
+  <main class="view active" id="viewResumo" aria-labelledby="titleResumo">
+    <h1 class="view-title" id="titleResumo">Resumo</h1>
+
+    <section class="spread">
+      <div class="fold"><div class="stitch"></div></div>
+      <div class="page-left">
+        <p class="eyebrow">Balanço do mês</p>
+        <div class="stamp-row">
+          <div class="stamp" id="stamp">
+            <div class="stamp-inner" id="stampInner">
+              <span class="label">Saldo</span>
+              <span class="verdict" id="stampVerdict">—</span>
+            </div>
+          </div>
+          <div class="totals-figures">
+            <div class="fig-line"><span class="k">Receitas</span><span class="v" id="totReceitas">R$ 0,00</span></div>
+            <div class="fig-line"><span class="k">Despesas</span><span class="v" id="totDespesas">R$ 0,00</span></div>
+            <div class="fig-line saldo"><span class="k">Saldo</span><span class="v" id="totSaldo">R$ 0,00</span></div>
+          </div>
+        </div>
+        <p class="balance-word" id="balanceWord">Registre um lançamento para começar a página deste mês.</p>
+      </div>
+      <div class="page-right">
+        <p class="eyebrow">Despesas por categoria</p>
+        <div class="bars" id="bars">
+          <p class="empty-note">Nenhuma despesa lançada neste período ainda.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== VIEW: LANÇAMENTO ===================== -->
+  <main class="view" id="viewLancamento" aria-labelledby="titleLancamento">
+    <h1 class="view-title" id="titleLancamento">Lançamento</h1>
+
+    <section class="entry-card">
+      <span class="tab">Novo registro</span>
+      <h2>Lançar movimento</h2>
+      <form class="entry-form" id="entryForm">
+        <div class="field">
+          <label for="fData">Data</label>
+          <input type="date" id="fData" required>
+        </div>
+        <div class="field">
+          <label for="fTipo">Tipo</label>
+          <select id="fTipo" required>
+            <option value="Receita">Receita</option>
+            <option value="Despesa" selected>Despesa</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fCategoria">Categoria</label>
+          <select id="fCategoria" required></select>
+        </div>
+        <div class="field">
+          <label for="fSubcategoria">Subcategoria</label>
+          <select id="fSubcategoria" required></select>
+        </div>
+        <div class="field">
+          <label for="fDescricao">Descrição</label>
+          <input type="text" id="fDescricao" placeholder="Ex.: compras do mês">
+        </div>
+        <div class="field">
+          <label for="fValor">Valor (R$)</label>
+          <input type="number" id="fValor" step="0.01" min="0" placeholder="0,00" required>
+        </div>
+        <button type="submit" class="submit-btn">Lançar</button>
+      </form>
+      <p class="form-msg" id="formMsg"></p>
+    </section>
+
+    <section class="ledger-card">
+      <div class="ledger-head">
+        <h2>Lançamentos do período</h2>
+        <span class="ledger-count" id="ledgerCount">0 registros</span>
+      </div>
+      <div id="ledgerBody">
+        <div class="ledger-empty">
+          <div class="quill">✒</div>
+          <p>A página deste mês ainda está em branco. Lance o primeiro registro acima.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== VIEW: CONFIGURAÇÕES ===================== -->
+  <main class="view" id="viewConfiguracoes" aria-labelledby="titleConfiguracoes">
+    <h1 class="view-title" id="titleConfiguracoes">Configurações</h1>
+
+    <section class="settings-card">
+      <span class="tab">Preferências</span>
+      <h2>Aparência</h2>
+      <p class="settings-desc">Escolha como a caderneta é exibida. A preferência fica salva neste navegador.</p>
+      <div class="theme-toggle" role="radiogroup" aria-label="Tema da caderneta">
+        <button type="button" class="theme-option active" data-theme="claro" role="radio" aria-checked="true">
+          <span class="theme-swatch light"></span>
+          <span>Claro</span>
+        </button>
+        <button type="button" class="theme-option" data-theme="escuro" role="radio" aria-checked="false">
+          <span class="theme-swatch dark"></span>
+          <span>Escuro</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="status" id="statusFooter"><span class="dot"></span><span class="txt">carregando caderneta…</span></footer>
+</div>
+
+<!-- ===================== NAV DRAWER ===================== -->
+<div class="nav-overlay" id="navOverlay"></div>
+<nav class="nav-drawer" id="navDrawer" aria-hidden="true">
+  <div class="nav-drawer-head">
+    <span class="eyebrow" style="margin:0;">Navegar</span>
+    <button class="nav-close" id="navCloseBtn" aria-label="Fechar menu">×</button>
+  </div>
+  <button class="nav-item active" data-view="resumo">
+    <span class="nav-glyph">R</span>
+    <span class="nav-text">Resumo<span class="cap">Balanço e categorias do mês</span></span>
+  </button>
+  <button class="nav-item" data-view="lancamento">
+    <span class="nav-glyph">L</span>
+    <span class="nav-text">Lançamento<span class="cap">Registrar e revisar entradas</span></span>
+  </button>
+  <button class="nav-item" data-view="configuracoes">
+    <span class="nav-glyph">C</span>
+    <span class="nav-text">Configurações<span class="cap">Aparência e preferências</span></span>
+  </button>
+</nav>
+
+<!-- ===================== DETAIL SHEET (dados do lançamento) ===================== -->
+<div class="detail-overlay" id="detailOverlay"></div>
+<div class="detail-sheet" id="detailSheet" role="dialog" aria-modal="true" aria-labelledby="detailTitle" aria-hidden="true">
+  <div class="detail-sheet-head">
+    <div>
+      <p class="eyebrow" style="margin:0;">Lançamento</p>
+      <h2 class="detail-title" id="detailTitle">—</h2>
+    </div>
+    <button class="nav-close" id="detailCloseBtn" aria-label="Fechar detalhes">×</button>
+  </div>
+  <dl class="detail-grid">
+    <div>
+      <dt>Data</dt>
+      <dd id="detailData">—</dd>
+    </div>
+    <div>
+      <dt>Tipo</dt>
+      <dd id="detailTipo">—</dd>
+    </div>
+    <div>
+      <dt>Categoria</dt>
+      <dd id="detailCategoria">—</dd>
+    </div>
+    <div>
+      <dt>Subcategoria</dt>
+      <dd id="detailSubcategoria">—</dd>
+    </div>
+    <div class="full">
+      <dt>Descrição</dt>
+      <dd id="detailDescricao">—</dd>
+    </div>
+    <div class="full">
+      <dt>Valor</dt>
+      <dd id="detailValor" class="detail-valor">—</dd>
+    </div>
+  </dl>
+  <button type="button" class="delete-entry-btn" id="detailDeleteBtn">Excluir lançamento</button>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
