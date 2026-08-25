@@ -301,7 +301,7 @@
     box-shadow: 0 1px 2px rgba(var(--shadow-color),0.15), 0 8px 20px -10px rgba(var(--shadow-color),0.25);
     position: relative;
   }
-  .entry-card .tab{
+  .tab{
     position:absolute; top:-11px; left: 26px; background: var(--green); color: var(--white);
     font-family:'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing:0.14em; text-transform:uppercase;
     padding: 5px 12px; border-radius: 2px;
@@ -481,6 +481,116 @@
   .delete-entry-btn:hover{ background: var(--rust); color: var(--white); }
   .delete-entry-btn:focus-visible{ outline: 2px solid var(--rust); outline-offset: 2px; }
 
+  /* ---------- FAB + speed dial (novo lançamento) ---------- */
+  .fab-overlay{
+    position: fixed; inset: 0; background: rgba(20,18,10,0.35);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 42;
+  }
+  .fab-overlay.open{ opacity: 1; pointer-events: auto; }
+
+  .fab-wrap{
+    position: fixed; right: 22px; bottom: 22px; z-index: 46;
+    display:flex; flex-direction:column; align-items:flex-end; gap: 12px;
+  }
+  .speed-dial{
+    display:flex; flex-direction:column; align-items:flex-end; gap: 10px; margin-bottom: 2px;
+    opacity: 0; transform: translateY(10px) scale(0.95); pointer-events:none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .fab-wrap.open .speed-dial{ opacity: 1; transform: translateY(0) scale(1); pointer-events:auto; }
+
+  .speed-option{
+    display:flex; align-items:center; gap: 10px; border:none; cursor:pointer;
+    padding: 11px 20px 11px 12px; border-radius: 30px; color: var(--white);
+    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing:0.05em;
+    box-shadow: 0 4px 14px rgba(var(--shadow-color),0.3);
+    transition: transform 0.12s ease, filter 0.12s ease;
+  }
+  .speed-option:hover{ filter: brightness(1.08); transform: translateX(-2px); }
+  .speed-option:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .speed-option.receita{ background: var(--green); }
+  .speed-option.despesa{ background: var(--rust); }
+  .speed-icon{
+    width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.24);
+    display:flex; align-items:center; justify-content:center; font-size: 15px; font-weight:700; line-height:1;
+  }
+
+  .fab-btn{
+    width: 60px; height: 60px; border-radius: 50%; border: none; cursor:pointer;
+    background: var(--green); color: var(--white); font-size: 30px; line-height:1;
+    box-shadow: 0 8px 20px rgba(var(--shadow-color),0.35);
+    transition: transform 0.28s cubic-bezier(.34,1.56,.64,1), background 0.15s ease;
+  }
+  .fab-btn:hover{ background: var(--green-2); }
+  .fab-btn.open{ transform: rotate(45deg); background: var(--rust); }
+  .fab-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 3px; }
+
+  /* ---------- add sheet (formulário, sobe de baixo) ---------- */
+  .add-overlay{
+    position: fixed; inset: 0; background: rgba(20,18,10,0.45);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease; z-index: 62;
+  }
+  .add-overlay.open{ opacity: 1; pointer-events: auto; }
+
+  .add-sheet{
+    position: fixed; left: 50%; bottom: 0; width: 100%; max-width: 520px;
+    transform: translate(-50%, 100%); transition: transform 0.34s cubic-bezier(.32,.72,.35,1);
+    background: var(--white); z-index: 65; border-radius: 14px 14px 0 0;
+    box-shadow: 0 -14px 34px rgba(var(--shadow-color),0.32);
+    max-height: 88vh; overflow-y: auto;
+  }
+  .add-sheet.open{ transform: translate(-50%, 0); }
+
+  .add-sheet-band{
+    padding: 22px 26px 20px; border-radius: 14px 14px 0 0;
+    background: var(--rust); color: var(--white); transition: background 0.2s ease;
+  }
+  .add-sheet-band.receita{ background: var(--green); }
+  .add-sheet-band-top{ display:flex; align-items:center; justify-content:space-between; }
+  .add-sheet-tipo{
+    font-family:'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85;
+  }
+  .add-sheet-band .nav-close{ color: var(--white); }
+  .add-sheet-band .nav-close:hover{ background: rgba(255,255,255,0.2); color: var(--white); }
+  .add-valor-label{
+    display:block; font-family:'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; opacity: 0.8; margin-top: 16px;
+  }
+  .add-valor-row{ display:flex; align-items:baseline; gap: 8px; margin-top: 4px; }
+  .add-valor-prefix{ font-family:'Fraunces', serif; font-size: 22px; font-weight: 600; }
+  .add-valor-row input{
+    background: none; border: none; color: var(--white); font-family:'Fraunces', serif; font-weight: 700;
+    font-size: 40px; width: 100%; padding: 0;
+  }
+  .add-valor-row input::placeholder{ color: rgba(255,255,255,0.55); }
+  .add-valor-row input:focus{ outline: none; }
+  .add-valor-row input::-webkit-outer-spin-button, .add-valor-row input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+
+  .add-sheet-form{ padding: 22px 26px 26px; display:flex; flex-direction:column; gap: 18px; }
+  .field-row{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .date-quick{ display:flex; gap: 8px; margin-top: 6px; }
+  .date-pill{
+    flex:1; padding: 9px 6px; border-radius: 20px; border: 1.5px solid var(--rule-strong);
+    background: var(--paper); font-family:'IBM Plex Mono', monospace; font-size: 12px;
+    letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-soft); cursor:pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .date-pill:hover{ border-color: var(--green-light); }
+  .date-pill.active{ background: var(--green); border-color: var(--green); color: var(--white); font-weight: 600; }
+  .date-pill:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .date-custom{ margin-top: 10px; }
+
+  .add-sheet-actions{ display:flex; gap: 12px; margin-top: 2px; }
+  .cancel-btn{
+    flex: 1; background: none; border: 1.5px solid var(--rule-strong); color: var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 12px 16px; border-radius: 3px; cursor:pointer; transition: background 0.15s ease;
+  }
+  .cancel-btn:hover{ background: var(--paper-2); }
+  .cancel-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .submit-btn.wide{ flex: 1.4; text-align:center; }
+
   footer.status{
     text-align:center; font-family:'IBM Plex Mono', monospace; font-size: 10.5px;
     color: var(--ink-faint); margin-top: 22px; letter-spacing: 0.05em;
@@ -513,6 +623,8 @@
     .ledger-row .val-cell{ text-align:left; }
     .detail-sheet{ max-width: 100%; border-radius: 0 0 0 0; padding: 20px 20px 24px; }
     .detail-grid{ grid-template-columns: 1fr; }
+    .fab-wrap{ right: 16px; bottom: 16px; }
+    .add-sheet{ max-width: 100%; max-height: 92vh; }
   }
 
   @media (prefers-reduced-motion: reduce){

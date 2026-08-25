@@ -172,7 +172,7 @@ function render(){
     ledgerBody.innerHTML = `
       <div class="ledger-empty">
         <div class="quill">✒</div>
-        <p>A página deste mês ainda está em branco. Lance o primeiro registro acima.</p>
+        <p>A página deste mês ainda está em branco. Toque no botão + para lançar o primeiro.</p>
       </div>`;
     return;
   }
@@ -202,8 +202,7 @@ function render(){
   });
 }
 
-// ---------- form ----------
-document.getElementById('fTipo').addEventListener('change', syncTipoDefaults);
+// ---------- form (add sheet) ----------
 document.getElementById('fCategoria').addEventListener('change', syncSubcategorias);
 
 document.getElementById('entryForm').addEventListener('submit', async (e)=>{
@@ -230,9 +229,8 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   document.getElementById('mesSel').value = d.getMonth()+1;
   document.getElementById('anoSel').value = d.getFullYear();
 
-  document.getElementById('fDescricao').value = '';
-  document.getElementById('fValor').value = '';
   render();
+  closeAddSheet();
 });
 
 document.getElementById('mesSel').addEventListener('change', render);
@@ -267,7 +265,9 @@ navOverlay.addEventListener('click', closeDrawer);
 document.getElementById('navCloseBtn').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
-  if(detailSheet.classList.contains('open')) closeDetail();
+  if(addSheet.classList.contains('open')) closeAddSheet();
+  else if(detailSheet.classList.contains('open')) closeDetail();
+  else if(fabWrap.classList.contains('open')) closeSpeedDial();
   else if(navDrawer.classList.contains('open')) closeDrawer();
 });
 
@@ -325,6 +325,90 @@ document.getElementById('detailDeleteBtn').addEventListener('click', async ()=>{
   closeDetail();
   render();
 });
+
+// ---------- FAB + speed dial (novo lançamento) ----------
+const fabBtn = document.getElementById('fabBtn');
+const fabWrap = document.getElementById('fabWrap');
+const fabOverlay = document.getElementById('fabOverlay');
+
+function openSpeedDial(){
+  fabWrap.classList.add('open');
+  fabOverlay.classList.add('open');
+  fabBtn.classList.add('open');
+  fabBtn.setAttribute('aria-expanded', 'true');
+}
+function closeSpeedDial(){
+  fabWrap.classList.remove('open');
+  fabOverlay.classList.remove('open');
+  fabBtn.classList.remove('open');
+  fabBtn.setAttribute('aria-expanded', 'false');
+}
+fabBtn.addEventListener('click', ()=>{
+  closeDrawer();
+  fabWrap.classList.contains('open') ? closeSpeedDial() : openSpeedDial();
+});
+fabOverlay.addEventListener('click', closeSpeedDial);
+document.querySelectorAll('.speed-option').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    closeSpeedDial();
+    openAddSheet(btn.dataset.tipo);
+  });
+});
+
+// ---------- add sheet (formulário de novo lançamento) ----------
+const addSheet = document.getElementById('addSheet');
+const addOverlay = document.getElementById('addOverlay');
+const addSheetBand = document.getElementById('addSheetBand');
+const addSheetTitle = document.getElementById('addSheetTitle');
+
+function setQuickDate(which){
+  const dateInput = document.getElementById('fData');
+  document.querySelectorAll('.date-pill').forEach(p=> p.classList.toggle('active', p.dataset.date === which));
+  const now = new Date();
+  if(which === 'hoje'){
+    dateInput.hidden = true;
+    dateInput.value = now.toISOString().slice(0,10);
+  } else if(which === 'ontem'){
+    dateInput.hidden = true;
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    dateInput.value = y.toISOString().slice(0,10);
+  } else {
+    dateInput.hidden = false;
+    if(!dateInput.value) dateInput.value = now.toISOString().slice(0,10);
+    dateInput.focus();
+  }
+}
+document.querySelectorAll('.date-pill').forEach(p=>{
+  p.addEventListener('click', ()=> setQuickDate(p.dataset.date));
+});
+
+function openAddSheet(tipo){
+  document.getElementById('fTipo').value = tipo;
+  const isReceita = tipo === 'Receita';
+  addSheetTitle.textContent = isReceita ? 'Nova receita' : 'Nova despesa';
+  addSheetBand.classList.toggle('receita', isReceita);
+  addSheetBand.classList.toggle('despesa', !isReceita);
+
+  populateCategoriaSelect();
+  setQuickDate('hoje');
+  document.getElementById('fDescricao').value = '';
+  document.getElementById('fValor').value = '';
+  document.getElementById('formMsg').textContent = '';
+
+  addSheet.classList.add('open');
+  addOverlay.classList.add('open');
+  addSheet.setAttribute('aria-hidden', 'false');
+  document.getElementById('fValor').focus();
+}
+function closeAddSheet(){
+  addSheet.classList.remove('open');
+  addOverlay.classList.remove('open');
+  addSheet.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('addSheetCloseBtn').addEventListener('click', closeAddSheet);
+document.getElementById('addCancelBtn').addEventListener('click', closeAddSheet);
+addOverlay.addEventListener('click', closeAddSheet);
 
 // ---------- theme (claro/escuro) ----------
 const THEME_KEY = 'tema';

@@ -67,42 +67,6 @@
   <main class="view" id="viewLancamento" aria-labelledby="titleLancamento">
     <h1 class="view-title" id="titleLancamento">Lançamento</h1>
 
-    <section class="entry-card">
-      <span class="tab">Novo registro</span>
-      <h2>Lançar movimento</h2>
-      <form class="entry-form" id="entryForm">
-        <div class="field">
-          <label for="fData">Data</label>
-          <input type="date" id="fData" required>
-        </div>
-        <div class="field">
-          <label for="fTipo">Tipo</label>
-          <select id="fTipo" required>
-            <option value="Receita">Receita</option>
-            <option value="Despesa" selected>Despesa</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="fCategoria">Categoria</label>
-          <select id="fCategoria" required></select>
-        </div>
-        <div class="field">
-          <label for="fSubcategoria">Subcategoria</label>
-          <select id="fSubcategoria" required></select>
-        </div>
-        <div class="field">
-          <label for="fDescricao">Descrição</label>
-          <input type="text" id="fDescricao" placeholder="Ex.: compras do mês">
-        </div>
-        <div class="field">
-          <label for="fValor">Valor (R$)</label>
-          <input type="number" id="fValor" step="0.01" min="0" placeholder="0,00" required>
-        </div>
-        <button type="submit" class="submit-btn">Lançar</button>
-      </form>
-      <p class="form-msg" id="formMsg"></p>
-    </section>
-
     <section class="ledger-card">
       <div class="ledger-head">
         <h2>Lançamentos do período</h2>
@@ -111,7 +75,7 @@
       <div id="ledgerBody">
         <div class="ledger-empty">
           <div class="quill">✒</div>
-          <p>A página deste mês ainda está em branco. Lance o primeiro registro acima.</p>
+          <p>A página deste mês ainda está em branco. Toque no botão + para lançar o primeiro.</p>
         </div>
       </div>
     </section>
@@ -199,6 +163,67 @@
     </div>
   </dl>
   <button type="button" class="delete-entry-btn" id="detailDeleteBtn">Excluir lançamento</button>
+</div>
+
+<!-- ===================== FAB: novo lançamento (+/−) ===================== -->
+<div class="fab-overlay" id="fabOverlay"></div>
+<div class="fab-wrap" id="fabWrap">
+  <div class="speed-dial" id="speedDial">
+    <button type="button" class="speed-option receita" data-tipo="Receita">
+      <span class="speed-icon">+</span> Receita
+    </button>
+    <button type="button" class="speed-option despesa" data-tipo="Despesa">
+      <span class="speed-icon">−</span> Despesa
+    </button>
+  </div>
+  <button type="button" class="fab-btn" id="fabBtn" aria-label="Novo lançamento" aria-expanded="false">+</button>
+</div>
+
+<!-- ===================== ADD SHEET (formulário, sobe de baixo) ===================== -->
+<div class="add-overlay" id="addOverlay"></div>
+<div class="add-sheet" id="addSheet" role="dialog" aria-modal="true" aria-labelledby="addSheetTitle" aria-hidden="true">
+  <div class="add-sheet-band" id="addSheetBand">
+    <div class="add-sheet-band-top">
+      <span class="add-sheet-tipo" id="addSheetTitle">Nova despesa</span>
+      <button type="button" class="nav-close" id="addSheetCloseBtn" aria-label="Fechar">×</button>
+    </div>
+    <label class="add-valor-label" for="fValor">Valor</label>
+    <div class="add-valor-row">
+      <span class="add-valor-prefix">R$</span>
+      <input type="number" id="fValor" step="0.01" min="0" placeholder="0,00" required inputmode="decimal" autocomplete="off">
+    </div>
+  </div>
+  <form id="entryForm" class="add-sheet-form">
+    <input type="hidden" id="fTipo" value="Despesa">
+    <div class="field">
+      <label for="fDescricao">Nome</label>
+      <input type="text" id="fDescricao" placeholder="Nome da transação…">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="fCategoria">Categoria</label>
+        <select id="fCategoria" required></select>
+      </div>
+      <div class="field">
+        <label for="fSubcategoria">Subcategoria</label>
+        <select id="fSubcategoria" required></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Data</label>
+      <div class="date-quick" id="dateQuick">
+        <button type="button" class="date-pill active" data-date="hoje">Hoje</button>
+        <button type="button" class="date-pill" data-date="ontem">Ontem</button>
+        <button type="button" class="date-pill" data-date="outra">Outra</button>
+      </div>
+      <input type="date" id="fData" class="date-custom" hidden required>
+    </div>
+    <p class="form-msg" id="formMsg"></p>
+    <div class="add-sheet-actions">
+      <button type="button" class="cancel-btn" id="addCancelBtn">Cancelar</button>
+      <button type="submit" class="submit-btn wide">Lançar</button>
+    </div>
+  </form>
 </div>
 
 <script src="main.js"></script>
