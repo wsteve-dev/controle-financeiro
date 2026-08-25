@@ -104,20 +104,56 @@
   }
   .top-right{ display:flex; align-items:center; gap: 12px; }
 
-  .period-control{
-    display:flex; align-items:center; gap:10px;
-    font-family:'IBM Plex Mono', monospace; font-size: 12.5px;
-    background: var(--white); border: 1px solid var(--ink);
-    padding: 8px 12px; border-radius: 3px;
-    box-shadow: 0 2px 0 rgba(var(--shadow-color),0.15);
-  }
-  .period-control span{ color: var(--ink-soft); letter-spacing:0.05em; }
-  .period-control select{
+  .period-btn{
+    display:flex; align-items:center; gap: 8px;
     font-family:'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 600;
-    background: transparent; border: none; border-bottom: 1.5px solid var(--gold);
-    color: var(--ink); padding: 3px 4px; cursor:pointer;
+    background: var(--white); border: 1px solid var(--ink); color: var(--ink);
+    padding: 9px 13px; border-radius: 3px; cursor:pointer;
+    box-shadow: 0 2px 0 rgba(var(--shadow-color),0.15);
+    transition: background 0.15s ease;
   }
-  .period-control select:focus{ outline: none; border-bottom-color: var(--green); }
+  .period-btn:hover{ background: var(--paper-2); }
+  .period-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .period-chevron{ color: var(--gold); font-size: 13px; }
+
+  /* ---------- period sheet (seletor de período) ---------- */
+  .period-overlay{
+    position: fixed; inset: 0; background: rgba(20,18,10,0.45);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease; z-index: 62;
+  }
+  .period-overlay.open{ opacity: 1; pointer-events: auto; }
+
+  .period-sheet{
+    position: fixed; top: 50%; left: 50%; width: 92%; max-width: 460px;
+    transform: translate(-50%, -50%) scale(0.95);
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
+    background: var(--white); z-index: 65; border-radius: 14px;
+    box-shadow: 0 22px 50px rgba(var(--shadow-color),0.4);
+    max-height: 88vh; overflow-y: auto;
+    opacity: 0; pointer-events: none;
+    padding: 22px 26px 26px;
+  }
+  .period-sheet.open{ opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+  .period-sheet-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--rule);
+  }
+  #periodModeQuick{ margin-bottom: 18px; flex-wrap: wrap; }
+  .period-mode-content{ margin-bottom: 16px; }
+  .preset-list{ display:flex; flex-direction:column; gap: 8px; }
+  .preset-option{
+    text-align:left; padding: 12px 14px; border-radius: 6px; border: 1.5px solid var(--rule-strong);
+    background: var(--paper); color: var(--ink-soft); cursor:pointer;
+    font-family:'IBM Plex Sans', sans-serif; font-size: 13.5px;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .preset-option:hover{ border-color: var(--green-light); }
+  .preset-option.active{ background: var(--green); border-color: var(--green); color: var(--white); font-weight: 600; }
+  .preset-option:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .period-preview{
+    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft);
+    background: var(--paper); border-radius: 6px; padding: 10px 14px; margin: 0 0 18px;
+  }
 
   /* ---------- hamburger + nav drawer ---------- */
   .menu-btn{
@@ -328,6 +364,12 @@
   .field input:focus, .field select:focus{
     outline: none; border-bottom-color: var(--green); background: rgba(47,74,60,0.035);
   }
+  /* o menu nativo do navegador costuma renderizar com fundo claro independente do tema da página,
+     então fixamos cores legíveis nas opções em vez de herdar var(--ink) */
+  .field select option{
+    color: #1e2a22;
+    background: #ffffff;
+  }
   button.submit-btn{
     background: var(--green); color: var(--white); border: none;
     font-family:'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing:0.07em;
@@ -500,20 +542,26 @@
   .fab-wrap.open .speed-dial{ opacity: 1; transform: translateY(0) scale(1); pointer-events:auto; }
 
   .speed-option{
-    display:flex; align-items:center; gap: 10px; border:none; cursor:pointer;
-    padding: 11px 20px 11px 12px; border-radius: 30px; color: var(--white);
-    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; letter-spacing:0.05em;
-    box-shadow: 0 4px 14px rgba(var(--shadow-color),0.3);
-    transition: transform 0.12s ease, filter 0.12s ease;
+    display:flex; align-items:center; gap: 12px; border:none; cursor:pointer;
+    background: none; padding: 0;
+    transition: transform 0.12s ease;
   }
-  .speed-option:hover{ filter: brightness(1.08); transform: translateX(-2px); }
-  .speed-option:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
-  .speed-option.receita{ background: var(--green); }
-  .speed-option.despesa{ background: var(--rust); }
+  .speed-option:hover{ transform: translateX(-2px); }
+  .speed-option:focus-visible{ outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 20px; }
+  .speed-label{
+    background: rgba(24,20,14,0.92); color: #faf7ee; white-space:nowrap;
+    font-family:'IBM Plex Sans', sans-serif; font-size: 13.5px; font-weight: 600;
+    padding: 9px 16px; border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(var(--shadow-color),0.28);
+  }
   .speed-icon{
-    width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.24);
-    display:flex; align-items:center; justify-content:center; font-size: 15px; font-weight:700; line-height:1;
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+    display:flex; align-items:center; justify-content:center;
+    color: var(--white); font-size: 22px; font-weight:700; line-height:1;
+    box-shadow: 0 4px 14px rgba(var(--shadow-color),0.32);
   }
+  .speed-option.receita .speed-icon{ background: var(--green); }
+  .speed-option.despesa .speed-icon{ background: var(--rust); }
 
   .fab-btn{
     width: 60px; height: 60px; border-radius: 50%; border: none; cursor:pointer;
@@ -567,6 +615,12 @@
   .add-valor-row input::placeholder{ color: rgba(255,255,255,0.55); }
   .add-valor-row input:focus{ outline: none; }
   .add-valor-row input::-webkit-outer-spin-button, .add-valor-row input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .add-valor-row.error input{ animation: shakeError 0.35s ease; }
+  @keyframes shakeError{
+    0%, 100%{ transform: translateX(0); }
+    25%{ transform: translateX(-6px); }
+    75%{ transform: translateX(6px); }
+  }
 
   .add-sheet-form{ padding: 22px 26px 26px; display:flex; flex-direction:column; gap: 18px; }
   .field-row{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -628,8 +682,8 @@
     .page-left{ border-bottom: 1px dashed var(--rule-strong); }
     .brand-mark{ font-size: 28px; }
     .top-right{ gap: 8px; }
-    .period-control{ padding: 7px 9px; gap: 6px; }
-    .period-control span{ display:none; }
+    .period-btn{ padding: 8px 10px; font-size: 11.5px; }
+    .period-btn span:first-child{ max-width: 90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     form.entry-form{ grid-template-columns: 1fr 1fr; gap: 14px; }
     form.entry-form .field:nth-child(5){ grid-column: 1 / -1; }
     button.submit-btn{ grid-column: 1 / -1; }

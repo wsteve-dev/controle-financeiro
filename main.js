@@ -16,7 +16,6 @@ const CATEGORIAS_RECEITA = {
 };
 // mapa unificado usado para consultar subcategorias por nome de categoria, independente do tipo
 const CATEGORIAS = { ...CATEGORIAS_DESPESA, ...CATEGORIAS_RECEITA };
-const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const STORAGE_KEY = "transacoes";
 
 let transactions = [];
@@ -34,26 +33,73 @@ function toISODateLocal(d){
   return `${y}-${m}-${day}`;
 }
 
-// ---------- populate selects ----------
-function populatePeriodSelects(){
-  const mesSel = document.getElementById('mesSel');
-  const anoSel = document.getElementById('anoSel');
-  MESES.forEach((m,i)=>{
-    const opt = document.createElement('option');
-    opt.value = i+1; opt.textContent = m;
-    mesSel.appendChild(opt);
-  });
-  const now = new Date();
-  mesSel.value = now.getMonth()+1;
-  const anoAtual = now.getFullYear();
-  for(let y = anoAtual - 3; y <= anoAtual + 2; y++){
-    const opt = document.createElement('option');
-    opt.value = y; opt.textContent = y;
-    anoSel.appendChild(opt);
+// ---------- período ----------
+let periodState = { mode: 'mes', anchorDate: null };
+
+function computeRange(state){
+  const today = new Date(); today.setHours(0,0,0,0);
+  let start, end;
+  if(state.mode === 'semanal'){
+    start = new Date(state.anchorDate + 'T00:00:00');
+    end = new Date(start);
+    end.setDate(end.getDate() + 6);
+  } else if(state.mode === 'mes'){
+    start = new Date(state.anchorDate + 'T00:00:00');
+    const nextMonthYear = start.getFullYear() + (start.getMonth() === 11 ? 1 : 0);
+    const nextMonth = (start.getMonth() + 1) % 12;
+    const daysInNextMonth = new Date(nextMonthYear, nextMonth + 1, 0).getDate();
+    const clampedDay = Math.min(start.getDate(), daysInNextMonth);
+    end = new Date(nextMonthYear, nextMonth, clampedDay);
+    end.setDate(end.getDate() - 1);
+  } else if(state.mode === 'ano'){
+    start = new Date(state.anchorDate + 'T00:00:00');
+    const nextYear = start.getFullYear() + 1;
+    const daysInTargetMonth = new Date(nextYear, start.getMonth() + 1, 0).getDate();
+    const clampedDay = Math.min(start.getDate(), daysInTargetMonth);
+    end = new Date(nextYear, start.getMonth(), clampedDay);
+    end.setDate(end.getDate() - 1);
+  } else if(state.mode === 'personalizado'){
+    start = new Date(state.customStart + 'T00:00:00');
+    end = new Date(state.customEnd + 'T00:00:00');
+  } else if(state.mode === 'preset'){
+    end = new Date(today);
+    if(state.presetKey === '7d'){ start = new Date(today); start.setDate(start.getDate() - 6); }
+    else if(state.presetKey === '30d'){ start = new Date(today); start.setDate(start.getDate() - 29); }
+    else if(state.presetKey === '90d'){ start = new Date(today); start.setDate(start.getDate() - 89); }
+    else if(state.presetKey === '12m'){ start = new Date(today); start.setMonth(start.getMonth() - 12); start.setDate(start.getDate() + 1); }
+    else if(state.presetKey === 'ytd'){ start = new Date(today.getFullYear(), 0, 1); }
   }
-  anoSel.value = anoAtual;
-  document.getElementById('fData').value = toISODateLocal(now);
+  return { start, end };
 }
+
+function formatPeriodLabel(state){
+  const { start, end } = computeRange(state);
+  const shortFmt = (d)=> d.toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
+  const monthYearFmt = (d)=>{
+    const s = d.toLocaleDateString('pt-BR', { month:'long', year:'numeric' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
+  if(state.mode === 'mes'){
+    const lastDayOfMonth = new Date(end.getFullYear(), end.getMonth()+1, 0).getDate();
+    const isCalendarMonth = start.getDate()===1 && end.getDate()===lastDayOfMonth &&
+      start.getMonth()===end.getMonth() && start.getFullYear()===end.getFullYear();
+    return isCalendarMonth ? monthYearFmt(start) : `${shortFmt(start)} – ${shortFmt(end)}`;
+  }
+  if(state.mode === 'ano'){
+    const isCalendarYear = start.getMonth()===0 && start.getDate()===1 &&
+      end.getMonth()===11 && end.getDate()===31 && start.getFullYear()===end.getFullYear();
+    return isCalendarYear ? String(start.getFullYear()) : `${shortFmt(start)} ${start.getFullYear()} – ${shortFmt(end)} ${end.getFullYear()}`;
+  }
+  if(state.mode === 'preset'){
+    const labels = { '7d':'Últimos 7 dias', '30d':'Últimos 30 dias', '90d':'Últimos 90 dias', '12m':'Últimos 12 meses', 'ytd':'Acumulado no ano' };
+    return labels[state.presetKey] || 'Período';
+  }
+  return `${shortFmt(start)} – ${shortFmt(end)}`;
+}
+function updatePeriodLabel(){
+  document.getElementById('periodLabel').textContent = formatPeriodLabel(periodState);
+}
+
 
 function populateCategoriaSelect(){
   const tipo = document.getElementById('fTipo').value;
@@ -110,44 +156,49 @@ function updateFooter(){
 }
 
 // ---------- recorrência ----------
-// calcula em quais datas um lançamento (recorrente ou não) ocorre dentro do mês/ano informado
-function occurrencesInPeriod(t, mes, ano){
+// calcula em quais datas um lançamento (recorrente ou não) ocorre dentro do intervalo [rangeStart, rangeEnd]
+function occurrencesInRange(t, rangeStart, rangeEnd){
   const repeticao = t.repeticao || 'nenhuma';
   const anchor = new Date(t.data + 'T00:00:00');
-  const periodStart = new Date(ano, mes - 1, 1);
-  const periodEnd = new Date(ano, mes, 0); // último dia do mês
   const endLimit = t.repetirDataFim ? new Date(t.repetirDataFim + 'T00:00:00') : null;
+  const results = [];
 
   if(repeticao === 'nenhuma'){
-    return (anchor >= periodStart && anchor <= periodEnd) ? [t.data] : [];
+    if(anchor >= rangeStart && anchor <= rangeEnd) results.push(t.data);
+    return results;
   }
-
-  const results = [];
 
   if(repeticao === 'semanal'){
     let cursor = new Date(anchor);
-    if(cursor < periodStart){
-      const diffDays = Math.round((periodStart - cursor) / 86400000);
+    if(cursor < rangeStart){
+      const diffDays = Math.round((rangeStart - cursor) / 86400000);
       const weeksToAdd = Math.ceil(diffDays / 7);
       cursor.setDate(cursor.getDate() + weeksToAdd * 7);
     }
-    while(cursor <= periodEnd){
+    while(cursor <= rangeEnd){
       if(cursor >= anchor && (!endLimit || cursor <= endLimit)){
         results.push(toISODateLocal(cursor));
       }
       cursor.setDate(cursor.getDate() + 7);
     }
-  } else if(repeticao === 'mensal'){
-    const anchorYM = anchor.getFullYear() * 12 + anchor.getMonth();
-    const candidateYM = ano * 12 + (mes - 1);
-    if(candidateYM >= anchorYM){
-      const daysInMonth = periodEnd.getDate();
-      const day = Math.min(anchor.getDate(), daysInMonth);
-      const occDate = new Date(ano, mes - 1, day);
-      if(!endLimit || occDate <= endLimit){
+    return results;
+  }
+
+  if(repeticao === 'mensal'){
+    const anchorDay = anchor.getDate();
+    const startYM = Math.max(anchor.getFullYear()*12 + anchor.getMonth(), rangeStart.getFullYear()*12 + rangeStart.getMonth());
+    const endYM = rangeEnd.getFullYear()*12 + rangeEnd.getMonth();
+    for(let ym = startYM; ym <= endYM; ym++){
+      const year = Math.floor(ym / 12);
+      const month = ym % 12;
+      const daysInMonth = new Date(year, month+1, 0).getDate();
+      const day = Math.min(anchorDay, daysInMonth);
+      const occDate = new Date(year, month, day);
+      if(occDate >= anchor && occDate >= rangeStart && occDate <= rangeEnd && (!endLimit || occDate <= endLimit)){
         results.push(toISODateLocal(occDate));
       }
     }
+    return results;
   }
   return results;
 }
@@ -163,17 +214,11 @@ function repeatLabel(t){
 }
 
 // ---------- rendering ----------
-function currentPeriod(){
-  return {
-    mes: parseInt(document.getElementById('mesSel').value, 10),
-    ano: parseInt(document.getElementById('anoSel').value, 10)
-  };
-}
 function filteredForPeriod(){
-  const {mes, ano} = currentPeriod();
+  const { start, end } = computeRange(periodState);
   const result = [];
   transactions.forEach(t=>{
-    occurrencesInPeriod(t, mes, ano).forEach(dateStr=>{
+    occurrencesInRange(t, start, end).forEach(dateStr=>{
       result.push({ ...t, data: dateStr });
     });
   });
@@ -281,8 +326,18 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   const descricao = document.getElementById('fDescricao').value.trim();
   const valor = parseFloat(document.getElementById('fValor').value);
 
-  if(!data || !valor || valor <= 0){
-    msg.textContent = 'Preencha a data e um valor maior que zero.';
+  if(!valor || valor <= 0){
+    msg.textContent = 'Informe um valor maior que zero.';
+    const valorInput = document.getElementById('fValor');
+    const valorRow = valorInput.closest('.add-valor-row');
+    valorRow.classList.remove('error');
+    void valorRow.offsetWidth; // força reflow para reiniciar a animação
+    valorRow.classList.add('error');
+    valorInput.focus();
+    return;
+  }
+  if(!data){
+    msg.textContent = 'Selecione a data do lançamento.';
     return;
   }
 
@@ -308,17 +363,14 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   transactions.push({ id: uid(), data, tipo, categoria, subcategoria, descricao, valor, repeticao, repetirAte, repetirDataFim });
   await saveTransactions();
 
-  // move period view to the entry's month/year so it's visible immediately
+  // muda a visão de período para o mês do novo lançamento, para que ele fique visível de imediato
   const d = new Date(data + 'T00:00:00');
-  document.getElementById('mesSel').value = d.getMonth()+1;
-  document.getElementById('anoSel').value = d.getFullYear();
+  periodState = { mode: 'mes', anchorDate: toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1)) };
+  updatePeriodLabel();
 
   render();
   closeAddSheet();
 });
-
-document.getElementById('mesSel').addEventListener('change', render);
-document.getElementById('anoSel').addEventListener('change', render);
 
 // ---------- navigation (hamburger drawer + views) ----------
 const menuBtn = document.getElementById('menuBtn');
@@ -349,7 +401,8 @@ navOverlay.addEventListener('click', closeDrawer);
 document.getElementById('navCloseBtn').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
-  if(addSheet.classList.contains('open')) closeAddSheet();
+  if(periodSheet.classList.contains('open')) closePeriodSheet();
+  else if(addSheet.classList.contains('open')) closeAddSheet();
   else if(detailSheet.classList.contains('open')) closeDetail();
   else if(fabWrap.classList.contains('open')) closeSpeedDial();
   else if(navDrawer.classList.contains('open')) closeDrawer();
@@ -529,12 +582,14 @@ function openAddSheet(tipo){
   resetRepeatFields();
   document.getElementById('fDescricao').value = '';
   document.getElementById('fValor').value = '';
+  document.getElementById('fValor').closest('.add-valor-row').classList.remove('error');
   document.getElementById('formMsg').textContent = '';
 
   addSheet.classList.add('open');
   addOverlay.classList.add('open');
   addSheet.setAttribute('aria-hidden', 'false');
-  document.getElementById('fValor').focus();
+  // pequeno atraso garante que o campo já está visível/pintado antes de focar (evita falha de foco em mobile)
+  setTimeout(()=> document.getElementById('fValor').focus(), 80);
 }
 function closeAddSheet(){
   addSheet.classList.remove('open');
@@ -583,9 +638,148 @@ document.querySelectorAll('.theme-option').forEach(btn=>{
   });
 });
 
+// ---------- period sheet (seletor de período) ----------
+const periodBtn = document.getElementById('periodBtn');
+const periodSheet = document.getElementById('periodSheet');
+const periodOverlay = document.getElementById('periodOverlay');
+
+function showPeriodMode(mode){
+  document.querySelectorAll('#periodModeQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.mode === mode));
+  const idByMode = { semanal:'periodModeSemanal', mes:'periodModeMes', ano:'periodModeAno', personalizado:'periodModePersonalizado', preset:'periodModePreset' };
+  Object.entries(idByMode).forEach(([m, id])=>{
+    document.getElementById(id).hidden = (m !== mode);
+  });
+}
+
+function currentPickerRange(){
+  const mode = document.querySelector('#periodModeQuick .date-pill.active').dataset.mode;
+  if(mode === 'semanal'){
+    const d = document.getElementById('pSemanalDate').value;
+    if(!d) return { mode };
+    const start = new Date(d + 'T00:00:00');
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    return { mode, start, end, anchorDate: d };
+  }
+  if(mode === 'mes'){
+    const d = document.getElementById('pMesDate').value;
+    if(!d) return { mode };
+    const start = new Date(d + 'T00:00:00');
+    const end = new Date(start); end.setMonth(end.getMonth()+1); end.setDate(end.getDate()-1);
+    return { mode, start, end, anchorDate: d };
+  }
+  if(mode === 'ano'){
+    const d = document.getElementById('pAnoDate').value;
+    if(!d) return { mode };
+    const start = new Date(d + 'T00:00:00');
+    const end = new Date(start); end.setFullYear(end.getFullYear()+1); end.setDate(end.getDate()-1);
+    return { mode, start, end, anchorDate: d };
+  }
+  if(mode === 'personalizado'){
+    const s = document.getElementById('pCustomStart').value;
+    const e = document.getElementById('pCustomEnd').value;
+    if(!s || !e) return { mode, customStart: s, customEnd: e };
+    return { mode, start: new Date(s+'T00:00:00'), end: new Date(e+'T00:00:00'), customStart: s, customEnd: e };
+  }
+  if(mode === 'preset'){
+    const activeBtn = document.querySelector('#presetList .preset-option.active');
+    const presetKey = activeBtn ? activeBtn.dataset.preset : null;
+    if(!presetKey) return { mode };
+    const range = computeRange({ mode:'preset', presetKey });
+    return { mode, start: range.start, end: range.end, presetKey };
+  }
+  return { mode };
+}
+
+function updatePeriodPreview(){
+  const r = currentPickerRange();
+  const preview = document.getElementById('periodPreview');
+  if(!r.start || !r.end || isNaN(r.start) || isNaN(r.end)){
+    preview.textContent = 'Selecione as datas.';
+    return;
+  }
+  if(r.end < r.start){
+    preview.textContent = 'A data final precisa ser depois da inicial.';
+    return;
+  }
+  const days = Math.round((r.end - r.start) / 86400000) + 1;
+  const fmt = (d)=> d.toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' });
+  preview.textContent = `${fmt(r.start)} – ${fmt(r.end)} · ${days} ${days === 1 ? 'dia' : 'dias'}`;
+}
+
+document.querySelectorAll('#periodModeQuick .date-pill').forEach(p=>{
+  p.addEventListener('click', ()=>{
+    showPeriodMode(p.dataset.mode);
+    updatePeriodPreview();
+  });
+});
+['pSemanalDate','pMesDate','pAnoDate','pCustomStart','pCustomEnd'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', updatePeriodPreview);
+});
+document.querySelectorAll('#presetList .preset-option').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#presetList .preset-option').forEach(b=> b.classList.toggle('active', b === btn));
+    updatePeriodPreview();
+  });
+});
+
+function openPeriodSheet(){
+  const now = new Date();
+  showPeriodMode(periodState.mode);
+
+  document.getElementById('pSemanalDate').value = periodState.mode === 'semanal' ? periodState.anchorDate : toISODateLocal(now);
+  document.getElementById('pMesDate').value = periodState.mode === 'mes' ? periodState.anchorDate : toISODateLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+  document.getElementById('pAnoDate').value = periodState.mode === 'ano' ? periodState.anchorDate : toISODateLocal(new Date(now.getFullYear(), 0, 1));
+
+  if(periodState.mode === 'personalizado'){
+    document.getElementById('pCustomStart').value = periodState.customStart;
+    document.getElementById('pCustomEnd').value = periodState.customEnd;
+  } else {
+    const r = computeRange(periodState.mode === 'preset' && !periodState.presetKey ? { mode:'preset', presetKey:'7d' } : periodState);
+    document.getElementById('pCustomStart').value = toISODateLocal(r.start);
+    document.getElementById('pCustomEnd').value = toISODateLocal(r.end);
+  }
+
+  document.querySelectorAll('#presetList .preset-option').forEach(b=>{
+    b.classList.toggle('active', periodState.mode === 'preset' && b.dataset.preset === periodState.presetKey);
+  });
+
+  updatePeriodPreview();
+  periodSheet.classList.add('open');
+  periodOverlay.classList.add('open');
+  periodSheet.setAttribute('aria-hidden', 'false');
+}
+function closePeriodSheet(){
+  periodSheet.classList.remove('open');
+  periodOverlay.classList.remove('open');
+  periodSheet.setAttribute('aria-hidden', 'true');
+}
+periodBtn.addEventListener('click', openPeriodSheet);
+document.getElementById('periodCloseBtn').addEventListener('click', closePeriodSheet);
+document.getElementById('periodCancelBtn').addEventListener('click', closePeriodSheet);
+periodOverlay.addEventListener('click', closePeriodSheet);
+
+document.getElementById('periodApplyBtn').addEventListener('click', ()=>{
+  const r = currentPickerRange();
+  if(!r.start || !r.end || isNaN(r.start) || isNaN(r.end) || r.end < r.start) return;
+
+  if(r.mode === 'semanal') periodState = { mode:'semanal', anchorDate: r.anchorDate };
+  else if(r.mode === 'mes') periodState = { mode:'mes', anchorDate: r.anchorDate };
+  else if(r.mode === 'ano') periodState = { mode:'ano', anchorDate: r.anchorDate };
+  else if(r.mode === 'personalizado') periodState = { mode:'personalizado', customStart: r.customStart, customEnd: r.customEnd };
+  else if(r.mode === 'preset') periodState = { mode:'preset', presetKey: r.presetKey };
+
+  updatePeriodLabel();
+  closePeriodSheet();
+  render();
+});
+
 // ---------- init ----------
 (async function init(){
-  populatePeriodSelects();
+  const now = new Date();
+  periodState = { mode: 'mes', anchorDate: toISODateLocal(new Date(now.getFullYear(), now.getMonth(), 1)) };
+  updatePeriodLabel();
+  document.getElementById('fData').value = toISODateLocal(now);
+
   populateCategoriaSelect();
   await loadTheme();
   await loadTransactions();
