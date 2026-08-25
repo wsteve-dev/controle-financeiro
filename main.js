@@ -26,6 +26,14 @@ const fmtBRL = (n) => (n||0).toLocaleString('pt-BR', {style:'currency', currency
 
 function uid(){ return 't_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
 
+// data local em formato AAAA-MM-DD, sem conversão para UTC (evita bug de fuso horário)
+function toISODateLocal(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 // ---------- populate selects ----------
 function populatePeriodSelects(){
   const mesSel = document.getElementById('mesSel');
@@ -44,7 +52,7 @@ function populatePeriodSelects(){
     anoSel.appendChild(opt);
   }
   anoSel.value = anoAtual;
-  document.getElementById('fData').value = now.toISOString().slice(0,10);
+  document.getElementById('fData').value = toISODateLocal(now);
 }
 
 function populateCategoriaSelect(){
@@ -101,6 +109,59 @@ function updateFooter(){
     : 'não foi possível salvar — os lançamentos podem não persistir';
 }
 
+// ---------- recorrência ----------
+// calcula em quais datas um lançamento (recorrente ou não) ocorre dentro do mês/ano informado
+function occurrencesInPeriod(t, mes, ano){
+  const repeticao = t.repeticao || 'nenhuma';
+  const anchor = new Date(t.data + 'T00:00:00');
+  const periodStart = new Date(ano, mes - 1, 1);
+  const periodEnd = new Date(ano, mes, 0); // último dia do mês
+  const endLimit = t.repetirDataFim ? new Date(t.repetirDataFim + 'T00:00:00') : null;
+
+  if(repeticao === 'nenhuma'){
+    return (anchor >= periodStart && anchor <= periodEnd) ? [t.data] : [];
+  }
+
+  const results = [];
+
+  if(repeticao === 'semanal'){
+    let cursor = new Date(anchor);
+    if(cursor < periodStart){
+      const diffDays = Math.round((periodStart - cursor) / 86400000);
+      const weeksToAdd = Math.ceil(diffDays / 7);
+      cursor.setDate(cursor.getDate() + weeksToAdd * 7);
+    }
+    while(cursor <= periodEnd){
+      if(cursor >= anchor && (!endLimit || cursor <= endLimit)){
+        results.push(toISODateLocal(cursor));
+      }
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  } else if(repeticao === 'mensal'){
+    const anchorYM = anchor.getFullYear() * 12 + anchor.getMonth();
+    const candidateYM = ano * 12 + (mes - 1);
+    if(candidateYM >= anchorYM){
+      const daysInMonth = periodEnd.getDate();
+      const day = Math.min(anchor.getDate(), daysInMonth);
+      const occDate = new Date(ano, mes - 1, day);
+      if(!endLimit || occDate <= endLimit){
+        results.push(toISODateLocal(occDate));
+      }
+    }
+  }
+  return results;
+}
+function repeatLabel(t){
+  const repeticao = t.repeticao || 'nenhuma';
+  if(repeticao === 'nenhuma') return 'Não repete';
+  const freq = repeticao === 'semanal' ? 'Semanalmente' : 'Mensalmente';
+  if(t.repetirAte === 'data' && t.repetirDataFim){
+    const fimFmt = new Date(t.repetirDataFim + 'T00:00:00').toLocaleDateString('pt-BR');
+    return `${freq}, até ${fimFmt}`;
+  }
+  return `${freq}, para sempre`;
+}
+
 // ---------- rendering ----------
 function currentPeriod(){
   return {
@@ -110,10 +171,13 @@ function currentPeriod(){
 }
 function filteredForPeriod(){
   const {mes, ano} = currentPeriod();
-  return transactions.filter(t=>{
-    const d = new Date(t.data + 'T00:00:00');
-    return (d.getMonth()+1) === mes && d.getFullYear() === ano;
-  }).sort((a,b)=> a.data.localeCompare(b.data));
+  const result = [];
+  transactions.forEach(t=>{
+    occurrencesInPeriod(t, mes, ano).forEach(dateStr=>{
+      result.push({ ...t, data: dateStr });
+    });
+  });
+  return result.sort((a,b)=> a.data.localeCompare(b.data));
 }
 
 function render(){
@@ -180,10 +244,12 @@ function render(){
   const rows = list.map((t, i)=>{
     const dataFmt = new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR');
     const num = String(i+1).padStart(3,'0');
+    const isRecurring = (t.repeticao || 'nenhuma') !== 'nenhuma';
+    const recurBadge = isRecurring ? `<span class="recur-badge" title="${repeatLabel(t)}">↻</span>` : '';
     return `
-      <button type="button" class="ledger-row" data-id="${t.id}">
+      <button type="button" class="ledger-row" data-id="${t.id}" data-date="${t.data}">
         <span class="entry-no"><span class="badge">Nº ${num}</span></span>
-        <span>${dataFmt}</span>
+        <span>${dataFmt}${recurBadge}</span>
         <span><span class="tipo-tag ${t.tipo==='Receita'?'receita':'despesa'}">${t.tipo}</span></span>
         <span class="cat-cell">${t.categoria}<span class="sub">${t.subcategoria}</span></span>
         <span class="desc-cell">${t.descricao || '—'}</span>
@@ -198,7 +264,7 @@ function render(){
     <div class="ledger-list">${rows}</div>`;
 
   ledgerBody.querySelectorAll('.ledger-row').forEach(btn=>{
-    btn.addEventListener('click', ()=> openDetail(btn.dataset.id));
+    btn.addEventListener('click', ()=> openDetail(btn.dataset.id, btn.dataset.date));
   });
 }
 
@@ -219,9 +285,27 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
     msg.textContent = 'Preencha a data e um valor maior que zero.';
     return;
   }
+
+  const repeticao = currentRepeat; // 'nenhuma' | 'semanal' | 'mensal'
+  let repetirAte = null;
+  let repetirDataFim = null;
+  if(repeticao !== 'nenhuma'){
+    repetirAte = currentRepeatUntil; // 'sempre' | 'data'
+    if(repetirAte === 'data'){
+      repetirDataFim = document.getElementById('fRepeatEndDate').value;
+      if(!repetirDataFim){
+        msg.textContent = 'Escolha até quando o lançamento deve se repetir.';
+        return;
+      }
+      if(repetirDataFim < data){
+        msg.textContent = 'A data final da repetição precisa ser depois da data inicial.';
+        return;
+      }
+    }
+  }
   msg.textContent = '';
 
-  transactions.push({ id: uid(), data, tipo, categoria, subcategoria, descricao, valor });
+  transactions.push({ id: uid(), data, tipo, categoria, subcategoria, descricao, valor, repeticao, repetirAte, repetirDataFim });
   await saveTransactions();
 
   // move period view to the entry's month/year so it's visible immediately
@@ -288,22 +372,29 @@ const detailSheet = document.getElementById('detailSheet');
 const detailOverlay = document.getElementById('detailOverlay');
 let openDetailId = null;
 
-function openDetail(id){
+function openDetail(id, occurrenceDate){
   const t = transactions.find(tr=>tr.id === id);
   if(!t) return;
   openDetailId = id;
 
   const isReceita = t.tipo === 'Receita';
+  const displayDate = occurrenceDate || t.data;
   document.getElementById('detailTitle').textContent = t.descricao || t.subcategoria;
-  document.getElementById('detailData').textContent = new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  document.getElementById('detailData').textContent = new Date(displayDate+'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
   document.getElementById('detailTipo').textContent = t.tipo;
   document.getElementById('detailCategoria').textContent = t.categoria;
   document.getElementById('detailSubcategoria').textContent = t.subcategoria;
   document.getElementById('detailDescricao').textContent = t.descricao || '—';
+  document.getElementById('detailRepeticao').textContent = repeatLabel(t);
   const valorEl = document.getElementById('detailValor');
   valorEl.textContent = (isReceita ? '+ ' : '− ') + fmtBRL(t.valor);
   valorEl.classList.toggle('receita', isReceita);
   valorEl.classList.toggle('despesa', !isReceita);
+
+  const note = document.getElementById('detailNote');
+  note.textContent = (t.repeticao && t.repeticao !== 'nenhuma')
+    ? 'Excluir remove toda a série de repetições, não só esta ocorrência.'
+    : '';
 
   detailSheet.classList.add('open');
   detailOverlay.classList.add('open');
@@ -347,7 +438,11 @@ fabBtn.addEventListener('click', ()=>{
   closeDrawer();
   fabWrap.classList.contains('open') ? closeSpeedDial() : openSpeedDial();
 });
-fabOverlay.addEventListener('click', closeSpeedDial);
+fabOverlay.addEventListener('click', ()=>{
+  closeSpeedDial();
+  closeAddSheet();
+  closeDetail();
+});
 document.querySelectorAll('.speed-option').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     closeSpeedDial();
@@ -363,25 +458,64 @@ const addSheetTitle = document.getElementById('addSheetTitle');
 
 function setQuickDate(which){
   const dateInput = document.getElementById('fData');
-  document.querySelectorAll('.date-pill').forEach(p=> p.classList.toggle('active', p.dataset.date === which));
+  document.querySelectorAll('#dateQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.date === which));
   const now = new Date();
   if(which === 'hoje'){
     dateInput.hidden = true;
-    dateInput.value = now.toISOString().slice(0,10);
+    dateInput.value = toISODateLocal(now);
   } else if(which === 'ontem'){
     dateInput.hidden = true;
     const y = new Date(now);
     y.setDate(y.getDate() - 1);
-    dateInput.value = y.toISOString().slice(0,10);
+    dateInput.value = toISODateLocal(y);
   } else {
     dateInput.hidden = false;
-    if(!dateInput.value) dateInput.value = now.toISOString().slice(0,10);
+    if(!dateInput.value) dateInput.value = toISODateLocal(now);
     dateInput.focus();
   }
 }
-document.querySelectorAll('.date-pill').forEach(p=>{
+document.querySelectorAll('#dateQuick .date-pill').forEach(p=>{
   p.addEventListener('click', ()=> setQuickDate(p.dataset.date));
 });
+
+// ---------- repetição ----------
+let currentRepeat = 'nenhuma';
+let currentRepeatUntil = 'sempre';
+
+function setRepeat(which){
+  currentRepeat = which;
+  document.querySelectorAll('#repeatQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.repeat === which));
+  const untilField = document.getElementById('repeatUntilField');
+  untilField.hidden = (which === 'nenhuma');
+  if(which !== 'nenhuma'){
+    setRepeatUntil(currentRepeatUntil);
+  }
+}
+function setRepeatUntil(which){
+  currentRepeatUntil = which;
+  document.querySelectorAll('#repeatUntilQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.until === which));
+  const endInput = document.getElementById('fRepeatEndDate');
+  endInput.hidden = (which !== 'data');
+  if(which === 'data'){
+    endInput.focus();
+  }
+}
+document.querySelectorAll('#repeatQuick .date-pill').forEach(p=>{
+  p.addEventListener('click', ()=> setRepeat(p.dataset.repeat));
+});
+document.querySelectorAll('#repeatUntilQuick .date-pill').forEach(p=>{
+  p.addEventListener('click', ()=> setRepeatUntil(p.dataset.until));
+});
+
+function resetRepeatFields(){
+  currentRepeat = 'nenhuma';
+  currentRepeatUntil = 'sempre';
+  document.querySelectorAll('#repeatQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.repeat === 'nenhuma'));
+  document.querySelectorAll('#repeatUntilQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.until === 'sempre'));
+  document.getElementById('repeatUntilField').hidden = true;
+  document.getElementById('fRepeatEndDate').hidden = true;
+  document.getElementById('fRepeatEndDate').value = '';
+}
 
 function openAddSheet(tipo){
   document.getElementById('fTipo').value = tipo;
@@ -392,6 +526,7 @@ function openAddSheet(tipo){
 
   populateCategoriaSelect();
   setQuickDate('hoje');
+  resetRepeatFields();
   document.getElementById('fDescricao').value = '';
   document.getElementById('fValor').value = '';
   document.getElementById('formMsg').textContent = '';

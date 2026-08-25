@@ -158,10 +158,15 @@
       <dd id="detailDescricao">—</dd>
     </div>
     <div class="full">
+      <dt>Repetição</dt>
+      <dd id="detailRepeticao">—</dd>
+    </div>
+    <div class="full">
       <dt>Valor</dt>
       <dd id="detailValor" class="detail-valor">—</dd>
     </div>
   </dl>
+  <p class="form-msg" id="detailNote"></p>
   <button type="button" class="delete-entry-btn" id="detailDeleteBtn">Excluir lançamento</button>
 </div>
 
@@ -179,7 +184,7 @@
   <button type="button" class="fab-btn" id="fabBtn" aria-label="Novo lançamento" aria-expanded="false">+</button>
 </div>
 
-<!-- ===================== ADD SHEET (formulário, sobe de baixo) ===================== -->
+<!-- ===================== ADD SHEET (formulário, centralizado) ===================== -->
 <div class="add-overlay" id="addOverlay"></div>
 <div class="add-sheet" id="addSheet" role="dialog" aria-modal="true" aria-labelledby="addSheetTitle" aria-hidden="true">
   <div class="add-sheet-band" id="addSheetBand">
@@ -217,6 +222,22 @@
         <button type="button" class="date-pill" data-date="outra">Outra</button>
       </div>
       <input type="date" id="fData" class="date-custom" hidden required>
+    </div>
+    <div class="field">
+      <label>Repetir</label>
+      <div class="date-quick" id="repeatQuick">
+        <button type="button" class="date-pill active" data-repeat="nenhuma">Não repete</button>
+        <button type="button" class="date-pill" data-repeat="semanal">Semanalmente</button>
+        <button type="button" class="date-pill" data-repeat="mensal">Mensalmente</button>
+      </div>
+    </div>
+    <div class="field repeat-until-field" id="repeatUntilField" hidden>
+      <label>Até quando</label>
+      <div class="date-quick" id="repeatUntilQuick">
+        <button type="button" class="date-pill active" data-until="sempre">Para sempre</button>
+        <button type="button" class="date-pill" data-until="data">Até uma data</button>
+      </div>
+      <input type="date" id="fRepeatEndDate" class="date-custom" hidden>
     </div>
     <p class="form-msg" id="formMsg"></p>
     <div class="add-sheet-actions">
