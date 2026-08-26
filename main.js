@@ -511,20 +511,21 @@ const addSheetTitle = document.getElementById('addSheetTitle');
 
 function setQuickDate(which){
   const dateInput = document.getElementById('fData');
+  const calSlot = document.getElementById('calSlotEntryDate');
   document.querySelectorAll('#dateQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.date === which));
   const now = new Date();
   if(which === 'hoje'){
-    dateInput.hidden = true;
+    calSlot.hidden = true;
     dateInput.value = toISODateLocal(now);
   } else if(which === 'ontem'){
-    dateInput.hidden = true;
+    calSlot.hidden = true;
     const y = new Date(now);
     y.setDate(y.getDate() - 1);
     dateInput.value = toISODateLocal(y);
   } else {
-    dateInput.hidden = false;
-    if(!dateInput.value) dateInput.value = toISODateLocal(now);
-    dateInput.focus();
+    calMountFor(calSlot, dateInput.value || toISODateLocal(now), false, (iso)=>{
+      dateInput.value = iso;
+    });
   }
 }
 document.querySelectorAll('#dateQuick .date-pill').forEach(p=>{
@@ -548,9 +549,18 @@ function setRepeatUntil(which){
   currentRepeatUntil = which;
   document.querySelectorAll('#repeatUntilQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.until === which));
   const endInput = document.getElementById('fRepeatEndDate');
-  endInput.hidden = (which !== 'data');
+  const calSlot = document.getElementById('calSlotRepeatEnd');
+  calSlot.hidden = (which !== 'data');
   if(which === 'data'){
-    endInput.focus();
+    const now = new Date();
+    let defaultDate = endInput.value;
+    if(!defaultDate){
+      const d = new Date(now); d.setMonth(d.getMonth() + 3);
+      defaultDate = toISODateLocal(d);
+    }
+    calMountFor(calSlot, defaultDate, false, (iso)=>{
+      endInput.value = iso;
+    });
   }
 }
 document.querySelectorAll('#repeatQuick .date-pill').forEach(p=>{
@@ -566,7 +576,7 @@ function resetRepeatFields(){
   document.querySelectorAll('#repeatQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.repeat === 'nenhuma'));
   document.querySelectorAll('#repeatUntilQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.until === 'sempre'));
   document.getElementById('repeatUntilField').hidden = true;
-  document.getElementById('fRepeatEndDate').hidden = true;
+  document.getElementById('calSlotRepeatEnd').hidden = true;
   document.getElementById('fRepeatEndDate').value = '';
 }
 
@@ -638,47 +648,204 @@ document.querySelectorAll('.theme-option').forEach(btn=>{
   });
 });
 
+// ---------- calendário reutilizável (usado no período e em qualquer campo de data do app) ----------
+const sharedCalendarEl = document.getElementById('sharedCalendar');
+let calState = { viewYear: 2026, viewMonth: 0, selectedDate: null, rangeMode: null, onSelect: null };
+
+function calMountFor(slotEl, selectedDate, rangeMode, onSelect){
+  slotEl.hidden = false;
+  slotEl.appendChild(sharedCalendarEl);
+  sharedCalendarEl.hidden = false;
+  const base = selectedDate || toISODateLocal(new Date());
+  const d = new Date(base + 'T00:00:00');
+  calState = { viewYear: d.getFullYear(), viewMonth: d.getMonth(), selectedDate: selectedDate || null, rangeMode, onSelect };
+  renderCalendar();
+}
+
+function renderCalendar(){
+  const monthName = new Date(calState.viewYear, calState.viewMonth, 1).toLocaleDateString('pt-BR', { month:'long' });
+  document.getElementById('calMonthLabel').textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  document.getElementById('calYearLabel').textContent = calState.viewYear;
+
+  const todayStr = toISODateLocal(new Date());
+  let rangeStart = null, rangeEnd = null;
+  if(calState.rangeMode && calState.selectedDate){
+    rangeStart = new Date(calState.selectedDate + 'T00:00:00');
+    rangeEnd = computeRange({ mode: calState.rangeMode, anchorDate: calState.selectedDate }).end;
+  }
+
+  const firstDow = new Date(calState.viewYear, calState.viewMonth, 1).getDay();
+  const totalDays = new Date(calState.viewYear, calState.viewMonth + 1, 0).getDate();
+
+  const cells = [];
+  for(let i = firstDow; i > 0; i--){
+    const d = new Date(calState.viewYear, calState.viewMonth, 1 - i);
+    cells.push({ date: d, muted: true });
+  }
+  for(let day = 1; day <= totalDays; day++){
+    cells.push({ date: new Date(calState.viewYear, calState.viewMonth, day), muted: false });
+  }
+  while(cells.length < 42){
+    const last = cells[cells.length - 1].date;
+    const d = new Date(last);
+    d.setDate(d.getDate() + 1);
+    cells.push({ date: d, muted: true });
+  }
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  cells.forEach(cell=>{
+    const iso = toISODateLocal(cell.date);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cal-day';
+    btn.textContent = cell.date.getDate();
+    if(cell.muted){
+      btn.classList.add('muted');
+      btn.disabled = true;
+      btn.tabIndex = -1;
+    } else {
+      if(iso === todayStr) btn.classList.add('today');
+      if(iso === calState.selectedDate) btn.classList.add('selected');
+      if(rangeStart && cell.date >= rangeStart && cell.date <= rangeEnd) btn.classList.add('in-range');
+      btn.addEventListener('click', ()=>{
+        calState.selectedDate = iso;
+        renderCalendar();
+        if(calState.onSelect) calState.onSelect(iso);
+      });
+    }
+    grid.appendChild(btn);
+  });
+}
+document.getElementById('calPrevBtn').addEventListener('click', ()=>{
+  calState.viewMonth--;
+  if(calState.viewMonth < 0){ calState.viewMonth = 11; calState.viewYear--; }
+  renderCalendar();
+});
+document.getElementById('calNextBtn').addEventListener('click', ()=>{
+  calState.viewMonth++;
+  if(calState.viewMonth > 11){ calState.viewMonth = 0; calState.viewYear++; }
+  renderCalendar();
+});
+
 // ---------- period sheet (seletor de período) ----------
 const periodBtn = document.getElementById('periodBtn');
 const periodSheet = document.getElementById('periodSheet');
 const periodOverlay = document.getElementById('periodOverlay');
+const CAL_MODES = ['semanal', 'mes'];
+const CAL_CAPTIONS = {
+  semanal: 'Escolha o dia inicial — a semana pega ele e os próximos 6 dias.',
+  mes: 'Escolha o dia de referência do mês.'
+};
 
 function showPeriodMode(mode){
   document.querySelectorAll('#periodModeQuick .date-pill').forEach(p=> p.classList.toggle('active', p.dataset.mode === mode));
-  const idByMode = { semanal:'periodModeSemanal', mes:'periodModeMes', ano:'periodModeAno', personalizado:'periodModePersonalizado', preset:'periodModePreset' };
-  Object.entries(idByMode).forEach(([m, id])=>{
-    document.getElementById(id).hidden = (m !== mode);
+  document.getElementById('periodModeCalendar').hidden = !CAL_MODES.includes(mode);
+  document.getElementById('periodModeYear').hidden = (mode !== 'ano');
+  document.getElementById('periodModePersonalizado').hidden = (mode !== 'personalizado');
+  document.getElementById('periodModePreset').hidden = (mode !== 'preset');
+}
+
+function initCalForMode(mode){
+  const now = new Date();
+  let selected;
+  if(periodState.mode === mode && periodState.anchorDate){
+    selected = periodState.anchorDate;
+  } else if(mode === 'mes'){
+    selected = toISODateLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+  } else {
+    selected = toISODateLocal(now);
+  }
+  document.getElementById('calCaption').textContent = CAL_CAPTIONS[mode];
+  calMountFor(document.getElementById('calSlotAnchor'), selected, mode, (iso)=>{
+    updatePeriodPreview();
   });
 }
 
+// ---------- ano (grade de anos) ----------
+let yearPickerState = { baseYear: 2020, selectedYear: null };
+
+function initYearPicker(){
+  const now = new Date();
+  let selectedYear;
+  if(periodState.mode === 'ano' && periodState.anchorDate){
+    selectedYear = new Date(periodState.anchorDate + 'T00:00:00').getFullYear();
+  } else {
+    selectedYear = now.getFullYear();
+  }
+  yearPickerState = { baseYear: selectedYear - (selectedYear % 12), selectedYear };
+  renderYearPicker();
+}
+function renderYearPicker(){
+  const start = yearPickerState.baseYear;
+  document.getElementById('yearRangeLabel').textContent = `${start} – ${start + 11}`;
+  const thisYear = new Date().getFullYear();
+  const grid = document.getElementById('yearGrid');
+  grid.innerHTML = '';
+  for(let y = start; y < start + 12; y++){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'year-cell';
+    btn.textContent = y;
+    if(y === thisYear) btn.classList.add('today');
+    if(y === yearPickerState.selectedYear) btn.classList.add('selected');
+    btn.addEventListener('click', ()=>{
+      yearPickerState.selectedYear = y;
+      renderYearPicker();
+      updatePeriodPreview();
+    });
+    grid.appendChild(btn);
+  }
+}
+document.getElementById('yearPrevBtn').addEventListener('click', ()=>{
+  yearPickerState.baseYear -= 12;
+  renderYearPicker();
+});
+document.getElementById('yearNextBtn').addEventListener('click', ()=>{
+  yearPickerState.baseYear += 12;
+  renderYearPicker();
+});
+
+// ---------- personalizado (Início / Fim via chips + calendário) ----------
+let customStartVal = null, customEndVal = null;
+function fmtDateShort(iso){
+  return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+function refreshCustomChips(){
+  document.getElementById('chipCustomStart').textContent = 'Início: ' + (customStartVal ? fmtDateShort(customStartVal) : '—');
+  document.getElementById('chipCustomEnd').textContent = 'Fim: ' + (customEndVal ? fmtDateShort(customEndVal) : '—');
+}
+function activateCustomTarget(target){
+  document.querySelectorAll('.chip-date').forEach(c=> c.classList.toggle('active', c.dataset.target === target));
+  const current = target === 'start' ? customStartVal : customEndVal;
+  calMountFor(document.getElementById('calSlotCustom'), current, false, (iso)=>{
+    if(target === 'start') customStartVal = iso; else customEndVal = iso;
+    refreshCustomChips();
+    updatePeriodPreview();
+  });
+}
+document.querySelectorAll('.chip-date').forEach(chip=>{
+  chip.addEventListener('click', ()=> activateCustomTarget(chip.dataset.target));
+});
+
 function currentPickerRange(){
   const mode = document.querySelector('#periodModeQuick .date-pill.active').dataset.mode;
-  if(mode === 'semanal'){
-    const d = document.getElementById('pSemanalDate').value;
+  if(CAL_MODES.includes(mode)){
+    const d = calState.selectedDate;
     if(!d) return { mode };
-    const start = new Date(d + 'T00:00:00');
-    const end = new Date(start); end.setDate(end.getDate() + 6);
-    return { mode, start, end, anchorDate: d };
-  }
-  if(mode === 'mes'){
-    const d = document.getElementById('pMesDate').value;
-    if(!d) return { mode };
-    const start = new Date(d + 'T00:00:00');
-    const end = new Date(start); end.setMonth(end.getMonth()+1); end.setDate(end.getDate()-1);
+    const { start, end } = computeRange({ mode, anchorDate: d });
     return { mode, start, end, anchorDate: d };
   }
   if(mode === 'ano'){
-    const d = document.getElementById('pAnoDate').value;
-    if(!d) return { mode };
-    const start = new Date(d + 'T00:00:00');
-    const end = new Date(start); end.setFullYear(end.getFullYear()+1); end.setDate(end.getDate()-1);
-    return { mode, start, end, anchorDate: d };
+    const y = yearPickerState.selectedYear;
+    if(!y) return { mode };
+    const anchorDate = toISODateLocal(new Date(y, 0, 1));
+    const { start, end } = computeRange({ mode, anchorDate });
+    return { mode, start, end, anchorDate };
   }
   if(mode === 'personalizado'){
-    const s = document.getElementById('pCustomStart').value;
-    const e = document.getElementById('pCustomEnd').value;
-    if(!s || !e) return { mode, customStart: s, customEnd: e };
-    return { mode, start: new Date(s+'T00:00:00'), end: new Date(e+'T00:00:00'), customStart: s, customEnd: e };
+    if(!customStartVal || !customEndVal) return { mode, customStart: customStartVal, customEnd: customEndVal };
+    return { mode, start: new Date(customStartVal+'T00:00:00'), end: new Date(customEndVal+'T00:00:00'), customStart: customStartVal, customEnd: customEndVal };
   }
   if(mode === 'preset'){
     const activeBtn = document.querySelector('#presetList .preset-option.active');
@@ -709,11 +876,11 @@ function updatePeriodPreview(){
 document.querySelectorAll('#periodModeQuick .date-pill').forEach(p=>{
   p.addEventListener('click', ()=>{
     showPeriodMode(p.dataset.mode);
+    if(CAL_MODES.includes(p.dataset.mode)) initCalForMode(p.dataset.mode);
+    else if(p.dataset.mode === 'ano') initYearPicker();
+    else if(p.dataset.mode === 'personalizado') activateCustomTarget(document.querySelector('.chip-date.active')?.dataset.target || 'start');
     updatePeriodPreview();
   });
-});
-['pSemanalDate','pMesDate','pAnoDate','pCustomStart','pCustomEnd'].forEach(id=>{
-  document.getElementById(id).addEventListener('input', updatePeriodPreview);
 });
 document.querySelectorAll('#presetList .preset-option').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -723,20 +890,25 @@ document.querySelectorAll('#presetList .preset-option').forEach(btn=>{
 });
 
 function openPeriodSheet(){
-  const now = new Date();
   showPeriodMode(periodState.mode);
 
-  document.getElementById('pSemanalDate').value = periodState.mode === 'semanal' ? periodState.anchorDate : toISODateLocal(now);
-  document.getElementById('pMesDate').value = periodState.mode === 'mes' ? periodState.anchorDate : toISODateLocal(new Date(now.getFullYear(), now.getMonth(), 1));
-  document.getElementById('pAnoDate').value = periodState.mode === 'ano' ? periodState.anchorDate : toISODateLocal(new Date(now.getFullYear(), 0, 1));
+  if(CAL_MODES.includes(periodState.mode)){
+    initCalForMode(periodState.mode);
+  } else if(periodState.mode === 'ano'){
+    initYearPicker();
+  }
 
   if(periodState.mode === 'personalizado'){
-    document.getElementById('pCustomStart').value = periodState.customStart;
-    document.getElementById('pCustomEnd').value = periodState.customEnd;
+    customStartVal = periodState.customStart;
+    customEndVal = periodState.customEnd;
   } else {
     const r = computeRange(periodState.mode === 'preset' && !periodState.presetKey ? { mode:'preset', presetKey:'7d' } : periodState);
-    document.getElementById('pCustomStart').value = toISODateLocal(r.start);
-    document.getElementById('pCustomEnd').value = toISODateLocal(r.end);
+    customStartVal = toISODateLocal(r.start);
+    customEndVal = toISODateLocal(r.end);
+  }
+  refreshCustomChips();
+  if(periodState.mode === 'personalizado'){
+    activateCustomTarget('start');
   }
 
   document.querySelectorAll('#presetList .preset-option').forEach(b=>{
@@ -755,7 +927,6 @@ function closePeriodSheet(){
 }
 periodBtn.addEventListener('click', openPeriodSheet);
 document.getElementById('periodCloseBtn').addEventListener('click', closePeriodSheet);
-document.getElementById('periodCancelBtn').addEventListener('click', closePeriodSheet);
 periodOverlay.addEventListener('click', closePeriodSheet);
 
 document.getElementById('periodApplyBtn').addEventListener('click', ()=>{

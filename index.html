@@ -222,7 +222,8 @@
         <button type="button" class="date-pill" data-date="ontem">Ontem</button>
         <button type="button" class="date-pill" data-date="outra">Outra</button>
       </div>
-      <input type="date" id="fData" class="date-custom" hidden required>
+      <input type="hidden" id="fData" required>
+      <div class="cal-slot" id="calSlotEntryDate" hidden></div>
     </div>
     <div class="field">
       <label>Repetir</label>
@@ -238,7 +239,8 @@
         <button type="button" class="date-pill active" data-until="sempre">Para sempre</button>
         <button type="button" class="date-pill" data-until="data">Até uma data</button>
       </div>
-      <input type="date" id="fRepeatEndDate" class="date-custom" hidden>
+      <input type="hidden" id="fRepeatEndDate">
+      <div class="cal-slot" id="calSlotRepeatEnd" hidden></div>
     </div>
     <p class="form-msg" id="formMsg"></p>
     <div class="add-sheet-actions">
@@ -248,71 +250,77 @@
   </form>
 </div>
 
+<!-- ===================== CALENDÁRIO REUTILIZÁVEL (movido via JS para o slot ativo) ===================== -->
+<div class="calendar-widget" id="sharedCalendar" hidden>
+  <div class="cal-header">
+    <button type="button" class="cal-nav" id="calPrevBtn" aria-label="Mês anterior">‹</button>
+    <button type="button" class="cal-monthyear" tabindex="-1">
+      <span id="calMonthLabel">Agosto</span> <span id="calYearLabel">2026</span>
+    </button>
+    <button type="button" class="cal-nav" id="calNextBtn" aria-label="Próximo mês">›</button>
+  </div>
+  <div class="cal-weekdays">
+    <span>dom</span><span>seg</span><span>ter</span><span>qua</span><span>qui</span><span>sex</span><span>sáb</span>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+</div>
+
 <!-- ===================== PERIOD SHEET (seletor de período) ===================== -->
 <div class="period-overlay" id="periodOverlay"></div>
 <div class="period-sheet" id="periodSheet" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="period-sheet-head">
-    <span class="eyebrow" style="margin:0;">Período</span>
-    <button type="button" class="nav-close" id="periodCloseBtn" aria-label="Fechar">×</button>
+  <div class="period-sheet-band">
+    <button type="button" class="period-close" id="periodCloseBtn" aria-label="Fechar">×</button>
   </div>
 
-  <div class="date-quick" id="periodModeQuick">
-    <button type="button" class="date-pill" data-mode="semanal">Semanal</button>
-    <button type="button" class="date-pill active" data-mode="mes">Mês</button>
-    <button type="button" class="date-pill" data-mode="ano">Ano</button>
-    <button type="button" class="date-pill" data-mode="personalizado">Personalizado</button>
-    <button type="button" class="date-pill" data-mode="preset">Presets</button>
-  </div>
-
-  <div class="period-mode-content" id="periodModeSemanal" hidden>
-    <div class="field">
-      <label for="pSemanalDate">Dia inicial (pega os próximos 7 dias)</label>
-      <input type="date" id="pSemanalDate">
+  <div class="period-sheet-body">
+    <div class="date-quick" id="periodModeQuick">
+      <button type="button" class="date-pill" data-mode="semanal">Semanal</button>
+      <button type="button" class="date-pill active" data-mode="mes">Mês</button>
+      <button type="button" class="date-pill" data-mode="ano">Ano</button>
+      <button type="button" class="date-pill" data-mode="personalizado">Personalizado</button>
+      <button type="button" class="date-pill" data-mode="preset">Presets</button>
     </div>
-  </div>
 
-  <div class="period-mode-content" id="periodModeMes">
-    <div class="field">
-      <label for="pMesDate">Dia de referência</label>
-      <input type="date" id="pMesDate">
+    <div class="period-mode-content" id="periodModeCalendar">
+      <p class="cal-caption" id="calCaption">Escolha o dia de referência.</p>
+      <div class="cal-slot" id="calSlotAnchor"></div>
     </div>
-  </div>
 
-  <div class="period-mode-content" id="periodModeAno" hidden>
-    <div class="field">
-      <label for="pAnoDate">Dia de referência</label>
-      <input type="date" id="pAnoDate">
-    </div>
-  </div>
-
-  <div class="period-mode-content" id="periodModePersonalizado" hidden>
-    <div class="field-row">
-      <div class="field">
-        <label for="pCustomStart">Início</label>
-        <input type="date" id="pCustomStart">
+    <div class="period-mode-content" id="periodModeYear" hidden>
+      <p class="cal-caption">Escolha o ano de referência.</p>
+      <div class="cal-header">
+        <button type="button" class="cal-nav" id="yearPrevBtn" aria-label="Década anterior">‹</button>
+        <button type="button" class="cal-monthyear" tabindex="-1">
+          <span id="yearRangeLabel">2020 – 2031</span>
+        </button>
+        <button type="button" class="cal-nav" id="yearNextBtn" aria-label="Próxima década">›</button>
       </div>
-      <div class="field">
-        <label for="pCustomEnd">Fim</label>
-        <input type="date" id="pCustomEnd">
+      <div class="year-grid" id="yearGrid"></div>
+    </div>
+
+    <div class="period-mode-content" id="periodModePersonalizado" hidden>
+      <div class="chip-date-row">
+        <button type="button" class="chip-date active" id="chipCustomStart" data-target="start">Início: —</button>
+        <button type="button" class="chip-date" id="chipCustomEnd" data-target="end">Fim: —</button>
+      </div>
+      <div class="cal-slot" id="calSlotCustom"></div>
+    </div>
+
+    <div class="period-mode-content" id="periodModePreset" hidden>
+      <div class="preset-list" id="presetList">
+        <button type="button" class="preset-option" data-preset="7d">Últimos 7 dias</button>
+        <button type="button" class="preset-option" data-preset="30d">Últimos 30 dias</button>
+        <button type="button" class="preset-option" data-preset="90d">Últimos 90 dias</button>
+        <button type="button" class="preset-option" data-preset="12m">Últimos 12 meses</button>
+        <button type="button" class="preset-option" data-preset="ytd">Acumulado no ano</button>
       </div>
     </div>
+
+    <p class="period-preview" id="periodPreview">—</p>
   </div>
 
-  <div class="period-mode-content" id="periodModePreset" hidden>
-    <div class="preset-list" id="presetList">
-      <button type="button" class="preset-option" data-preset="7d">Últimos 7 dias</button>
-      <button type="button" class="preset-option" data-preset="30d">Últimos 30 dias</button>
-      <button type="button" class="preset-option" data-preset="90d">Últimos 90 dias</button>
-      <button type="button" class="preset-option" data-preset="12m">Últimos 12 meses</button>
-      <button type="button" class="preset-option" data-preset="ytd">Acumulado no ano</button>
-    </div>
-  </div>
-
-  <p class="period-preview" id="periodPreview">—</p>
-
-  <div class="add-sheet-actions">
-    <button type="button" class="cancel-btn" id="periodCancelBtn">Cancelar</button>
-    <button type="button" class="submit-btn wide" id="periodApplyBtn">Aplicar</button>
+  <div class="period-sheet-footer">
+    <button type="button" class="period-select-btn" id="periodApplyBtn">Selecionar</button>
   </div>
 </div>
 

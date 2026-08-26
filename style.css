@@ -116,9 +116,19 @@
   .period-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
   .period-chevron{ color: var(--gold); font-size: 13px; }
 
-  /* ---------- period sheet (seletor de período) ---------- */
+  /* ---------- period sheet (seletor de período) — paleta fixa escura/azul,
+     independente do tema claro/escuro do resto do site, para reproduzir a referência ---------- */
+  .period-sheet{
+    --pk-bg: #1c1c1e;
+    --pk-band: #3e7bfa;
+    --pk-band-text: #ffffff;
+    --pk-text: #f2f2f4;
+    --pk-muted: #98989e;
+    --pk-day-bg: #2c2d33;
+    --pk-rule: rgba(242,242,244,0.12);
+  }
   .period-overlay{
-    position: fixed; inset: 0; background: rgba(20,18,10,0.45);
+    position: fixed; inset: 0; background: rgba(20,18,10,0.55);
     opacity: 0; pointer-events: none; transition: opacity 0.25s ease; z-index: 62;
   }
   .period-overlay.open{ opacity: 1; pointer-events: auto; }
@@ -127,33 +137,160 @@
     position: fixed; top: 50%; left: 50%; width: 92%; max-width: 460px;
     transform: translate(-50%, -50%) scale(0.95);
     transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
-    background: var(--white); z-index: 65; border-radius: 14px;
-    box-shadow: 0 22px 50px rgba(var(--shadow-color),0.4);
+    background: var(--pk-bg); z-index: 65; border-radius: 20px;
+    box-shadow: 0 22px 50px rgba(0,0,0,0.5);
     max-height: 88vh; overflow-y: auto;
     opacity: 0; pointer-events: none;
-    padding: 22px 26px 26px;
+    display:flex; flex-direction:column;
   }
   .period-sheet.open{ opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
-  .period-sheet-head{
-    display:flex; align-items:center; justify-content:space-between;
-    padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--rule);
+
+  .period-sheet-band{
+    background: var(--pk-band); border-radius: 20px 20px 0 0;
+    padding: 16px 16px 22px; display:flex; justify-content:flex-end;
   }
-  #periodModeQuick{ margin-bottom: 18px; flex-wrap: wrap; }
-  .period-mode-content{ margin-bottom: 16px; }
+  .period-close{
+    width: 34px; height: 34px; border-radius: 50%; border:none; cursor:pointer;
+    background: rgba(42,39,18,0.18); color: var(--pk-band-text); font-size: 18px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+    transition: background 0.15s ease;
+  }
+  .period-close:hover{ background: rgba(42,39,18,0.3); }
+  .period-close:focus-visible{ outline: 2px solid var(--pk-band-text); outline-offset: 2px; }
+
+  .period-sheet-body{
+    padding: 20px 18px 4px; height: 620px; display:flex; flex-direction:column;
+  }
+  #periodModeQuick{
+    margin: 0 -18px 20px; flex-wrap: nowrap; gap: 5px;
+    padding: 0 18px; justify-content: space-between;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #periodModeQuick::-webkit-scrollbar{ display:none; }
+  .period-sheet .date-pill{
+    flex: 0 0 auto; white-space: nowrap;
+    background: none; border: none; color: var(--pk-text); opacity: 0.55;
+    font-family:'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600;
+    letter-spacing: 0; text-transform: none;
+    padding: 9px 11px; border-radius: 16px;
+  }
+  .period-sheet .date-pill.active{
+    background: var(--pk-band); color: var(--pk-band-text); opacity: 1; font-weight: 700;
+  }
+  .period-mode-content{ flex: 1; min-height: 0; margin-bottom: 16px; }
   .preset-list{ display:flex; flex-direction:column; gap: 8px; }
   .preset-option{
-    text-align:left; padding: 12px 14px; border-radius: 6px; border: 1.5px solid var(--rule-strong);
-    background: var(--paper); color: var(--ink-soft); cursor:pointer;
+    text-align:left; padding: 12px 14px; border-radius: 8px; border: 1.5px solid var(--pk-rule);
+    background: var(--pk-day-bg); color: var(--pk-text); cursor:pointer;
     font-family:'IBM Plex Sans', sans-serif; font-size: 13.5px;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .preset-option:hover{ border-color: var(--green-light); }
-  .preset-option.active{ background: var(--green); border-color: var(--green); color: var(--white); font-weight: 600; }
-  .preset-option:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .preset-option:hover{ border-color: var(--pk-band); }
+  .preset-option.active{ background: var(--pk-band); border-color: var(--pk-band); color: var(--pk-band-text); font-weight: 700; }
+  .preset-option:focus-visible{ outline: 2px solid var(--pk-band); outline-offset: 2px; }
+  .period-sheet .field label{ color: var(--pk-muted); }
+  .period-sheet .field input{
+    color: var(--pk-text); border-bottom-color: var(--pk-rule);
+  }
+  .period-sheet .field input:focus{ border-bottom-color: var(--pk-band); background: rgba(62,123,250,0.08); }
+
+  /* ---------- calendário reutilizável (Semanal/Mês/Ano, Personalizado, datas do formulário) ----------
+     Define suas próprias variáveis de cor para funcionar corretamente onde quer que seja
+     movido via JS (dentro do period-sheet OU do add-sheet). */
+  #sharedCalendar{
+    --pk-band: #3e7bfa;
+    --pk-band-text: #ffffff;
+    --pk-text: #f2f2f4;
+    --pk-muted: #98989e;
+    --pk-day-bg: #2c2d33;
+    background: #1c1c1e;
+    border-radius: 14px;
+    padding: 16px 14px;
+  }
+  #sharedCalendar[hidden]{ display:none; }
+  .cal-slot:empty{ display:none; }
+
+  .chip-date-row{ display:flex; gap: 8px; margin-bottom: 14px; }
+  .chip-date{
+    flex: 1; text-align:center; padding: 10px 10px; border-radius: 8px;
+    border: 1.5px solid var(--pk-rule); background: var(--pk-day-bg); color: var(--pk-muted);
+    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; cursor:pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .chip-date.active{ border-color: var(--pk-band); color: var(--pk-text); font-weight: 600; }
+  .chip-date:focus-visible{ outline: 2px solid var(--pk-band); outline-offset: 2px; }
+
+  .cal-caption{
+    font-family:'IBM Plex Sans', sans-serif; font-size: 12.5px; color: var(--pk-muted);
+    margin: 0 0 16px;
+  }
+  .cal-header{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px;
+  }
+  .cal-monthyear{
+    background:none; border:none; cursor:default; padding: 0;
+    font-family:'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 20px; color: var(--pk-text);
+    display:flex; gap: 8px;
+  }
+  #calYearLabel{ color: var(--pk-band); }
+  .cal-nav{
+    width: 30px; height: 30px; border-radius: 50%; border:none;
+    background: none; color: var(--pk-band); font-size: 20px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition: background 0.15s ease;
+  }
+  .cal-nav:hover{ background: rgba(62,123,250,0.15); }
+  .cal-nav:focus-visible{ outline: 2px solid var(--pk-band); outline-offset: 2px; }
+  .cal-weekdays{
+    display:grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;
+  }
+  .cal-weekdays span{
+    text-align:center; font-family:'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 700;
+    color: var(--pk-text);
+  }
+  .cal-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px 4px; }
+  .cal-day{
+    aspect-ratio: 1; border-radius: 50%; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 500;
+    background: none; color: var(--pk-text);
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .cal-day:hover:not(.muted){ background: rgba(255,255,255,0.08); }
+  .cal-day:focus-visible{ outline: 2px solid var(--pk-band); outline-offset: 2px; }
+  .cal-day.muted{ background: none; color: rgba(152,152,158,0.45); cursor:default; }
+  .cal-day.in-range{ background: rgba(62,123,250,0.22); color: var(--pk-text); }
+  .cal-day.today{ box-shadow: inset 0 0 0 1.5px var(--pk-band); }
+  .cal-day.selected{ background: var(--pk-band); color: var(--pk-band-text); font-weight: 700; box-shadow:none; }
+
+  .year-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .year-cell{
+    padding: 16px 6px; border-radius: 10px; border:none; cursor:pointer;
+    font-family:'IBM Plex Sans', sans-serif; font-size: 15px; font-weight: 500;
+    background: var(--pk-day-bg); color: var(--pk-text);
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .year-cell:hover{ background: #3a3b42; }
+  .year-cell:focus-visible{ outline: 2px solid var(--pk-band); outline-offset: 2px; }
+  .year-cell.today{ box-shadow: inset 0 0 0 1.5px var(--pk-band); }
+  .year-cell.selected{ background: var(--pk-band); color: var(--pk-band-text); font-weight: 700; box-shadow:none; }
+
   .period-preview{
-    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft);
-    background: var(--paper); border-radius: 6px; padding: 10px 14px; margin: 0 0 18px;
+    font-family:'IBM Plex Sans', sans-serif; font-size: 13px; color: var(--pk-muted);
+    background: none; border: none; padding: 0; margin: 14px 0 8px;
   }
+
+  .period-sheet-footer{ padding: 14px 22px 22px; }
+  .period-select-btn{
+    width: 100%; border: none; cursor:pointer; border-radius: 30px;
+    background: var(--pk-band); color: var(--pk-band-text);
+    font-family:'IBM Plex Sans', sans-serif; font-size: 15px; font-weight: 700;
+    padding: 15px 16px;
+    transition: filter 0.12s ease;
+  }
+  .period-select-btn:hover{ filter: brightness(1.06); }
+  .period-select-btn:focus-visible{ outline: 2px solid var(--pk-text); outline-offset: 2px; }
 
   /* ---------- hamburger + nav drawer ---------- */
   .menu-btn{
