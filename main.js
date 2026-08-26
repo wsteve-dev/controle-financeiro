@@ -523,9 +523,11 @@ function setQuickDate(which){
     y.setDate(y.getDate() - 1);
     dateInput.value = toISODateLocal(y);
   } else {
-    calMountFor(calSlot, dateInput.value || toISODateLocal(now), false, (iso)=>{
+    function handleEntryDateSelect(iso){
       dateInput.value = iso;
-    });
+      calMountFor(calSlot, iso, null, handleEntryDateSelect);
+    }
+    calMountFor(calSlot, dateInput.value || toISODateLocal(now), null, handleEntryDateSelect);
   }
 }
 document.querySelectorAll('#dateQuick .date-pill').forEach(p=>{
@@ -558,9 +560,11 @@ function setRepeatUntil(which){
       const d = new Date(now); d.setMonth(d.getMonth() + 3);
       defaultDate = toISODateLocal(d);
     }
-    calMountFor(calSlot, defaultDate, false, (iso)=>{
+    function handleRepeatEndSelect(iso){
       endInput.value = iso;
-    });
+      calMountFor(calSlot, iso, null, handleRepeatEndSelect);
+    }
+    calMountFor(calSlot, defaultDate, null, handleRepeatEndSelect);
   }
 }
 document.querySelectorAll('#repeatQuick .date-pill').forEach(p=>{
@@ -650,15 +654,25 @@ document.querySelectorAll('.theme-option').forEach(btn=>{
 
 // ---------- calendário reutilizável (usado no período e em qualquer campo de data do app) ----------
 const sharedCalendarEl = document.getElementById('sharedCalendar');
-let calState = { viewYear: 2026, viewMonth: 0, selectedDate: null, rangeMode: null, onSelect: null };
+let calState = { viewYear: 2026, viewMonth: 0, selectedDates: [], rangeStart: null, rangeEnd: null, onSelect: null };
 
 function calMountFor(slotEl, selectedDate, rangeMode, onSelect){
+  const base = selectedDate || toISODateLocal(new Date());
+  let rangeStart = null, rangeEnd = null;
+  if(rangeMode && selectedDate){
+    rangeStart = new Date(selectedDate + 'T00:00:00');
+    rangeEnd = computeRange({ mode: rangeMode, anchorDate: selectedDate }).end;
+  }
+  calMountForRange(slotEl, base, selectedDate ? [selectedDate] : [], rangeStart, rangeEnd, onSelect);
+}
+
+function calMountForRange(slotEl, viewAnchorDate, selectedDates, rangeStart, rangeEnd, onSelect){
   slotEl.hidden = false;
   slotEl.appendChild(sharedCalendarEl);
   sharedCalendarEl.hidden = false;
-  const base = selectedDate || toISODateLocal(new Date());
+  const base = viewAnchorDate || toISODateLocal(new Date());
   const d = new Date(base + 'T00:00:00');
-  calState = { viewYear: d.getFullYear(), viewMonth: d.getMonth(), selectedDate: selectedDate || null, rangeMode, onSelect };
+  calState = { viewYear: d.getFullYear(), viewMonth: d.getMonth(), selectedDates, rangeStart, rangeEnd, onSelect };
   renderCalendar();
 }
 
@@ -668,11 +682,8 @@ function renderCalendar(){
   document.getElementById('calYearLabel').textContent = calState.viewYear;
 
   const todayStr = toISODateLocal(new Date());
-  let rangeStart = null, rangeEnd = null;
-  if(calState.rangeMode && calState.selectedDate){
-    rangeStart = new Date(calState.selectedDate + 'T00:00:00');
-    rangeEnd = computeRange({ mode: calState.rangeMode, anchorDate: calState.selectedDate }).end;
-  }
+  const { rangeStart, rangeEnd } = calState;
+  const selectedSet = new Set(calState.selectedDates || []);
 
   const firstDow = new Date(calState.viewYear, calState.viewMonth, 1).getDay();
   const totalDays = new Date(calState.viewYear, calState.viewMonth + 1, 0).getDate();
@@ -700,17 +711,17 @@ function renderCalendar(){
     btn.type = 'button';
     btn.className = 'cal-day';
     btn.textContent = cell.date.getDate();
+
+    if(cell.muted) btn.classList.add('muted');
+    if(iso === todayStr) btn.classList.add('today');
+    if(selectedSet.has(iso)) btn.classList.add('selected');
+    if(rangeStart && rangeEnd && cell.date >= rangeStart && cell.date <= rangeEnd) btn.classList.add('in-range');
+
     if(cell.muted){
-      btn.classList.add('muted');
       btn.disabled = true;
       btn.tabIndex = -1;
     } else {
-      if(iso === todayStr) btn.classList.add('today');
-      if(iso === calState.selectedDate) btn.classList.add('selected');
-      if(rangeStart && cell.date >= rangeStart && cell.date <= rangeEnd) btn.classList.add('in-range');
       btn.addEventListener('click', ()=>{
-        calState.selectedDate = iso;
-        renderCalendar();
         if(calState.onSelect) calState.onSelect(iso);
       });
     }
@@ -757,9 +768,12 @@ function initCalForMode(mode){
     selected = toISODateLocal(now);
   }
   document.getElementById('calCaption').textContent = CAL_CAPTIONS[mode];
-  calMountFor(document.getElementById('calSlotAnchor'), selected, mode, (iso)=>{
+
+  function handleAnchorSelect(iso){
+    calMountFor(document.getElementById('calSlotAnchor'), iso, mode, handleAnchorSelect);
     updatePeriodPreview();
-  });
+  }
+  calMountFor(document.getElementById('calSlotAnchor'), selected, mode, handleAnchorSelect);
 }
 
 // ---------- ano (grade de anos) ----------
@@ -808,6 +822,7 @@ document.getElementById('yearNextBtn').addEventListener('click', ()=>{
 
 // ---------- personalizado (Início / Fim via chips + calendário) ----------
 let customStartVal = null, customEndVal = null;
+let customActiveTarget = 'start';
 function fmtDateShort(iso){
   return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR');
 }
@@ -816,12 +831,21 @@ function refreshCustomChips(){
   document.getElementById('chipCustomEnd').textContent = 'Fim: ' + (customEndVal ? fmtDateShort(customEndVal) : '—');
 }
 function activateCustomTarget(target){
+  customActiveTarget = target;
   document.querySelectorAll('.chip-date').forEach(c=> c.classList.toggle('active', c.dataset.target === target));
-  const current = target === 'start' ? customStartVal : customEndVal;
-  calMountFor(document.getElementById('calSlotCustom'), current, false, (iso)=>{
-    if(target === 'start') customStartVal = iso; else customEndVal = iso;
+  renderCustomCalendar();
+}
+function renderCustomCalendar(){
+  const anchor = customActiveTarget === 'start' ? (customStartVal || customEndVal) : (customEndVal || customStartVal);
+  const viewAnchor = anchor || toISODateLocal(new Date());
+  const rangeStart = customStartVal ? new Date(customStartVal + 'T00:00:00') : null;
+  const rangeEnd = customEndVal ? new Date(customEndVal + 'T00:00:00') : null;
+  const selectedDates = [customStartVal, customEndVal].filter(Boolean);
+  calMountForRange(document.getElementById('calSlotCustom'), viewAnchor, selectedDates, rangeStart, rangeEnd, (iso)=>{
+    if(customActiveTarget === 'start') customStartVal = iso; else customEndVal = iso;
     refreshCustomChips();
     updatePeriodPreview();
+    renderCustomCalendar();
   });
 }
 document.querySelectorAll('.chip-date').forEach(chip=>{

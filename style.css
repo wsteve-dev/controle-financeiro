@@ -260,6 +260,8 @@
   .cal-day:hover:not(.muted){ background: rgba(255,255,255,0.08); }
   .cal-day:focus-visible{ outline: 2px solid var(--pk-band); outline-offset: 2px; }
   .cal-day.muted{ background: none; color: rgba(152,152,158,0.45); cursor:default; }
+  .cal-day.muted.in-range{ background: rgba(62,123,250,0.12); color: rgba(242,242,244,0.5); }
+  .cal-day.muted.selected{ background: rgba(62,123,250,0.55); color: rgba(255,255,255,0.8); }
   .cal-day.in-range{ background: rgba(62,123,250,0.22); color: var(--pk-text); }
   .cal-day.today{ box-shadow: inset 0 0 0 1.5px var(--pk-band); }
   .cal-day.selected{ background: var(--pk-band); color: var(--pk-band-text); font-weight: 700; box-shadow:none; }
