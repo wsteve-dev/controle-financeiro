@@ -24,15 +24,12 @@
         <span id="periodLabel">Período</span>
         <span class="period-chevron">⌄</span>
       </button>
-      <button class="menu-btn" id="menuBtn" aria-label="Abrir menu" aria-expanded="false" aria-controls="navDrawer">
-        <span></span><span></span><span></span>
-      </button>
     </div>
   </header>
 
   <!-- ===================== VIEW: RESUMO ===================== -->
   <main class="view active" id="viewResumo" aria-labelledby="titleResumo">
-    <h1 class="view-title" id="titleResumo">Resumo</h1>
+    <h1 class="view-title" id="titleResumo">Dashboard</h1>
 
     <section class="spread">
       <div class="fold"><div class="stitch"></div></div>
@@ -55,9 +52,26 @@
       </div>
       <div class="page-right">
         <p class="eyebrow">Despesas por categoria</p>
-        <div class="bars" id="bars">
+        <div class="donut-wrap" id="donutWrap">
+          <svg viewBox="0 0 120 120" class="donut-svg" id="donutSvg" aria-hidden="true"></svg>
+          <div class="donut-center">
+            <span class="donut-center-label">Total</span>
+            <span class="donut-center-value" id="donutCenterValue">R$ 0,00</span>
+          </div>
+        </div>
+        <div class="donut-legend" id="donutLegend">
           <p class="empty-note">Nenhuma despesa lançada neste período ainda.</p>
         </div>
+      </div>
+    </section>
+
+    <section class="recent-card">
+      <div class="recent-head">
+        <p class="eyebrow" style="margin:0;">Últimos lançamentos</p>
+        <a href="#" class="recent-see-all" id="recentSeeAll">Ver tudo</a>
+      </div>
+      <div class="recent-list" id="recentList">
+        <p class="empty-note">Nenhum lançamento neste período ainda.</p>
       </div>
     </section>
   </main>
@@ -99,29 +113,59 @@
         </button>
       </div>
     </section>
+
+    <section class="settings-card">
+      <span class="tab">Contas</span>
+      <h2>Suas contas</h2>
+      <p class="settings-desc">Cadastre os bancos ou contas que você usa para lançar receitas e despesas.</p>
+
+      <div class="account-list" id="accountList">
+        <p class="empty-note" id="accountEmptyNote">Nenhuma conta cadastrada ainda.</p>
+      </div>
+
+      <form class="account-form" id="accountForm">
+        <div class="field">
+          <label for="fContaNome">Nome da conta</label>
+          <input type="text" id="fContaNome" placeholder="Ex.: Banco do Brasil" maxlength="30" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Cor</label>
+          <div class="color-swatch-row" id="colorSwatchRow"></div>
+        </div>
+        <button type="submit" class="submit-btn">Adicionar conta</button>
+      </form>
+      <p class="form-msg" id="accountMsg"></p>
+    </section>
   </main>
 
   <footer class="status" id="statusFooter"><span class="dot"></span><span class="txt">carregando caderneta…</span></footer>
 </div>
 
-<!-- ===================== NAV DRAWER ===================== -->
-<div class="nav-overlay" id="navOverlay"></div>
-<nav class="nav-drawer" id="navDrawer" aria-hidden="true">
-  <div class="nav-drawer-head">
-    <span class="eyebrow" style="margin:0;">Navegar</span>
-    <button class="nav-close" id="navCloseBtn" aria-label="Fechar menu">×</button>
-  </div>
-  <button class="nav-item active" data-view="resumo">
-    <span class="nav-glyph">R</span>
-    <span class="nav-text">Resumo<span class="cap">Balanço e categorias do mês</span></span>
+<!-- ===================== SIDE NAV (fixa, sempre visível) ===================== -->
+<nav class="side-nav" id="sideNav" aria-label="Navegação principal">
+  <button class="nav-item active" data-view="resumo" title="Dashboard" aria-label="Dashboard">
+    <span class="nav-glyph">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" stroke="none">
+        <path d="M12 2.5 1.5 11h3V21h6v-6h3v6h6V11h3L12 2.5Z"></path>
+      </svg>
+    </span>
   </button>
-  <button class="nav-item" data-view="lancamento">
-    <span class="nav-glyph">L</span>
-    <span class="nav-text">Lançamento<span class="cap">Registrar e revisar entradas</span></span>
+  <button class="nav-item" data-view="lancamento" title="Lançamento" aria-label="Lançamento">
+    <span class="nav-glyph">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="6" x2="20" y2="6"></line>
+        <line x1="4" y1="12" x2="20" y2="12"></line>
+        <line x1="4" y1="18" x2="20" y2="18"></line>
+      </svg>
+    </span>
   </button>
-  <button class="nav-item" data-view="configuracoes">
-    <span class="nav-glyph">C</span>
-    <span class="nav-text">Configurações<span class="cap">Aparência e preferências</span></span>
+  <button class="nav-item" data-view="configuracoes" title="Configurações" aria-label="Configurações">
+    <span class="nav-glyph">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </span>
   </button>
 </nav>
 

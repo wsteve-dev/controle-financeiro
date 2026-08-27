@@ -17,8 +17,11 @@ const CATEGORIAS_RECEITA = {
 // mapa unificado usado para consultar subcategorias por nome de categoria, independente do tipo
 const CATEGORIAS = { ...CATEGORIAS_DESPESA, ...CATEGORIAS_RECEITA };
 const STORAGE_KEY = "transacoes";
+const CONTAS_STORAGE_KEY = "contas";
+const CONTA_CORES = ["#3e7bfa", "#2c9c6b", "#c9803a", "#b0473f", "#8a5cd6", "#3aa0b0", "#c76fa8", "#6f7a8a"];
 
 let transactions = [];
+let contas = [];
 let storageOK = true;
 
 const fmtBRL = (n) => (n||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
@@ -131,16 +134,16 @@ function syncTipoDefaults(){
 // ---------- storage ----------
 async function loadTransactions(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    transactions = res && res.value ? JSON.parse(res.value) : [];
+    const raw = localStorage.getItem(STORAGE_KEY);
+    transactions = raw ? JSON.parse(raw) : [];
   }catch(e){
     transactions = [];
   }
 }
 async function saveTransactions(){
   try{
-    const res = await window.storage.set(STORAGE_KEY, JSON.stringify(transactions), false);
-    storageOK = !!res;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+    storageOK = true;
   }catch(e){
     storageOK = false;
   }
@@ -154,6 +157,84 @@ function updateFooter(){
     ? 'salvo automaticamente neste navegador'
     : 'não foi possível salvar — os lançamentos podem não persistir';
 }
+
+// ---------- contas (bancos) ----------
+async function loadContas(){
+  try{
+    const raw = localStorage.getItem(CONTAS_STORAGE_KEY);
+    contas = raw ? JSON.parse(raw) : [];
+  }catch(e){
+    contas = [];
+  }
+}
+async function saveContas(){
+  try{
+    localStorage.setItem(CONTAS_STORAGE_KEY, JSON.stringify(contas));
+  }catch(e){ /* preferência não será mantida entre sessões */ }
+}
+function renderColorSwatches(){
+  const row = document.getElementById('colorSwatchRow');
+  row.innerHTML = '';
+  CONTA_CORES.forEach((cor, i)=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'color-swatch' + (i === 0 ? ' active' : '');
+    btn.style.background = cor;
+    btn.dataset.cor = cor;
+    btn.setAttribute('aria-label', 'Cor ' + cor);
+    btn.addEventListener('click', ()=>{
+      row.querySelectorAll('.color-swatch').forEach(s=> s.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    row.appendChild(btn);
+  });
+}
+function renderAccountList(){
+  const list = document.getElementById('accountList');
+  const emptyNote = document.getElementById('accountEmptyNote');
+  list.querySelectorAll('.account-row').forEach(el=> el.remove());
+  emptyNote.hidden = contas.length > 0;
+  contas.forEach(conta=>{
+    const row = document.createElement('div');
+    row.className = 'account-row';
+    row.innerHTML = `
+      <span class="account-dot" style="background:${conta.cor}"></span>
+      <span class="account-name">${conta.nome}</span>
+      <button type="button" class="account-del-btn" title="Excluir conta" aria-label="Excluir conta ${conta.nome}">×</button>
+    `;
+    row.querySelector('.account-del-btn').addEventListener('click', async ()=>{
+      contas = contas.filter(c=> c.id !== conta.id);
+      await saveContas();
+      renderAccountList();
+    });
+    list.appendChild(row);
+  });
+}
+document.getElementById('accountForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const msg = document.getElementById('accountMsg');
+  const nomeInput = document.getElementById('fContaNome');
+  const nome = nomeInput.value.trim();
+  if(!nome){
+    msg.textContent = 'Dê um nome para a conta.';
+    return;
+  }
+  if(contas.some(c=> c.nome.toLowerCase() === nome.toLowerCase())){
+    msg.textContent = 'Já existe uma conta com esse nome.';
+    return;
+  }
+  msg.textContent = '';
+  const corAtiva = document.querySelector('.color-swatch.active');
+  const cor = corAtiva ? corAtiva.dataset.cor : CONTA_CORES[0];
+
+  contas.push({ id: uid(), nome, cor });
+  await saveContas();
+  renderAccountList();
+
+  nomeInput.value = '';
+  document.querySelectorAll('.color-swatch').forEach((s, i)=> s.classList.toggle('active', i === 0));
+  nomeInput.focus();
+});
 
 // ---------- recorrência ----------
 // calcula em quais datas um lançamento (recorrente ou não) ocorre dentro do intervalo [rangeStart, rangeEnd]
@@ -225,6 +306,80 @@ function filteredForPeriod(){
   return result.sort((a,b)=> a.data.localeCompare(b.data));
 }
 
+const DONUT_COLORS = ['var(--green)','var(--gold)','var(--rust)','var(--green-light)','var(--gold-light)','var(--rust-light)'];
+
+function renderDonut(porCategoria){
+  const svg = document.getElementById('donutSvg');
+  const legend = document.getElementById('donutLegend');
+  const centerValue = document.getElementById('donutCenterValue');
+  const entries = Object.entries(porCategoria).sort((a,b)=> b[1]-a[1]);
+  const total = entries.reduce((s,[,v])=> s+v, 0);
+  centerValue.textContent = fmtBRL(total);
+
+  const r = 50, cx = 60, cy = 60;
+  const circumference = 2 * Math.PI * r;
+  let svgParts = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" style="stroke:var(--paper-2)" stroke-width="14"></circle>`;
+
+  if(entries.length === 0){
+    svg.innerHTML = svgParts;
+    legend.innerHTML = '<p class="empty-note">Nenhuma despesa lançada neste período ainda.</p>';
+    return;
+  }
+
+  let offset = 0;
+  let legendHTML = '';
+  entries.forEach(([cat, val], i)=>{
+    const pct = val / total;
+    const segLen = pct * circumference;
+    const color = DONUT_COLORS[i % DONUT_COLORS.length];
+    svgParts += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" style="stroke:${color}" stroke-width="14"
+      stroke-dasharray="${segLen.toFixed(2)} ${(circumference - segLen).toFixed(2)}"
+      stroke-dashoffset="${(-offset).toFixed(2)}"></circle>`;
+    offset += segLen;
+    legendHTML += `
+      <div class="donut-legend-row">
+        <span class="donut-legend-dot" style="background:${color}"></span>
+        <span class="donut-legend-name">${cat}</span>
+        <span class="donut-legend-pct">${Math.round(pct*100)}%</span>
+        <span class="donut-legend-val">${fmtBRL(val)}</span>
+      </div>`;
+  });
+  svg.innerHTML = svgParts;
+  legend.innerHTML = legendHTML;
+}
+
+function renderRecentList(list){
+  const container = document.getElementById('recentList');
+  const recent = [...list].sort((a,b)=> b.data.localeCompare(a.data)).slice(0, 6);
+
+  if(recent.length === 0){
+    container.innerHTML = '<p class="empty-note">Nenhum lançamento neste período ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = recent.map(t=>{
+    const dataFmt = new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
+    const isReceita = t.tipo === 'Receita';
+    return `
+      <button type="button" class="recent-row" data-id="${t.id}" data-date="${t.data}">
+        <span class="recent-icon ${isReceita ? 'receita' : 'despesa'}">${isReceita ? '+' : '−'}</span>
+        <span class="recent-info">
+          <span class="recent-name">${t.descricao || t.subcategoria}</span>
+          <span class="recent-sub">${dataFmt} · ${t.categoria}</span>
+        </span>
+        <span class="recent-val ${isReceita ? 'receita' : 'despesa'}">${isReceita ? '+' : '−'} ${fmtBRL(t.valor)}</span>
+      </button>`;
+  }).join('');
+
+  container.querySelectorAll('.recent-row').forEach(btn=>{
+    btn.addEventListener('click', ()=> openDetail(btn.dataset.id, btn.dataset.date));
+  });
+}
+document.getElementById('recentSeeAll').addEventListener('click', (e)=>{
+  e.preventDefault();
+  switchView('lancamento');
+});
+
 function render(){
   const list = filteredForPeriod();
 
@@ -252,25 +407,13 @@ function render(){
     balanceWord.textContent = `As despesas superaram as receitas em ${fmtBRL(Math.abs(saldo))}.`;
   }
 
-  // category bars (despesas only)
+  // categorias (donut de despesas)
   const porCategoria = {};
   list.filter(t=>t.tipo==='Despesa').forEach(t=>{
     porCategoria[t.categoria] = (porCategoria[t.categoria]||0) + t.valor;
   });
-  const bars = document.getElementById('bars');
-  const entries = Object.entries(porCategoria).sort((a,b)=>b[1]-a[1]);
-  if(entries.length === 0){
-    bars.innerHTML = '<p class="empty-note">Nenhuma despesa lançada neste período ainda.</p>';
-  } else {
-    const max = entries[0][1];
-    bars.innerHTML = entries.map(([cat, val])=>`
-      <div class="bar-row">
-        <span class="name">${cat}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(val/max*100).toFixed(1)}%"></div></div>
-        <span class="val">${fmtBRL(val)}</span>
-      </div>
-    `).join('');
-  }
+  renderDonut(porCategoria);
+  renderRecentList(list);
 
   // ledger table
   const ledgerBody = document.getElementById('ledgerBody');
@@ -372,40 +515,13 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   closeAddSheet();
 });
 
-// ---------- navigation (hamburger drawer + views) ----------
-const menuBtn = document.getElementById('menuBtn');
-const navDrawer = document.getElementById('navDrawer');
-const navOverlay = document.getElementById('navOverlay');
-
-function openDrawer(){
-  navDrawer.classList.add('open');
-  navOverlay.classList.add('open');
-  menuBtn.classList.add('open');
-  menuBtn.setAttribute('aria-expanded', 'true');
-  navDrawer.setAttribute('aria-hidden', 'false');
-  const activeItem = navDrawer.querySelector('.nav-item.active') || navDrawer.querySelector('.nav-item');
-  if(activeItem) activeItem.focus();
-}
-function closeDrawer(){
-  navDrawer.classList.remove('open');
-  navOverlay.classList.remove('open');
-  menuBtn.classList.remove('open');
-  menuBtn.setAttribute('aria-expanded', 'false');
-  navDrawer.setAttribute('aria-hidden', 'true');
-  menuBtn.focus();
-}
-menuBtn.addEventListener('click', ()=>{
-  navDrawer.classList.contains('open') ? closeDrawer() : openDrawer();
-});
-navOverlay.addEventListener('click', closeDrawer);
-document.getElementById('navCloseBtn').addEventListener('click', closeDrawer);
+// ---------- navigation (side nav fixa + views) ----------
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
   if(periodSheet.classList.contains('open')) closePeriodSheet();
   else if(addSheet.classList.contains('open')) closeAddSheet();
   else if(detailSheet.classList.contains('open')) closeDetail();
   else if(fabWrap.classList.contains('open')) closeSpeedDial();
-  else if(navDrawer.classList.contains('open')) closeDrawer();
 });
 
 function switchView(view){
@@ -416,7 +532,6 @@ function switchView(view){
 document.querySelectorAll('.nav-item').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     switchView(btn.dataset.view);
-    closeDrawer();
   });
 });
 
@@ -488,7 +603,6 @@ function closeSpeedDial(){
   fabBtn.setAttribute('aria-expanded', 'false');
 }
 fabBtn.addEventListener('click', ()=>{
-  closeDrawer();
   fabWrap.classList.contains('open') ? closeSpeedDial() : openSpeedDial();
 });
 fabOverlay.addEventListener('click', ()=>{
@@ -626,14 +740,14 @@ function applyTheme(theme){
   });
 }
 async function saveTheme(theme){
-  try{ await window.storage.set(THEME_KEY, theme, false); }catch(e){ /* preferência não será mantida entre sessões */ }
+  try{ localStorage.setItem(THEME_KEY, theme); }catch(e){ /* preferência não será mantida entre sessões */ }
 }
 async function loadTheme(){
   let theme = 'claro';
   try{
-    const res = await window.storage.get(THEME_KEY, false);
-    if(res && res.value){
-      theme = res.value;
+    const saved = localStorage.getItem(THEME_KEY);
+    if(saved){
+      theme = saved;
     } else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){
       theme = 'escuro';
     }
@@ -976,8 +1090,11 @@ document.getElementById('periodApplyBtn').addEventListener('click', ()=>{
   document.getElementById('fData').value = toISODateLocal(now);
 
   populateCategoriaSelect();
+  renderColorSwatches();
   await loadTheme();
   await loadTransactions();
+  await loadContas();
+  renderAccountList();
   render();
   updateFooter();
 })();
