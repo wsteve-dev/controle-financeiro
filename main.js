@@ -159,6 +159,13 @@ function updateFooter(){
 }
 
 // ---------- contas (bancos) ----------
+const MOEDA_INFO = {
+  BRL: { label: 'Real', simbolo: 'R$' },
+  USD: { label: 'Dólar', simbolo: 'US$' },
+  JPY: { label: 'Iene', simbolo: '¥' }
+};
+let pendingFotoDataUrl = null;
+
 async function loadContas(){
   try{
     const raw = localStorage.getItem(CONTAS_STORAGE_KEY);
@@ -170,7 +177,7 @@ async function loadContas(){
 async function saveContas(){
   try{
     localStorage.setItem(CONTAS_STORAGE_KEY, JSON.stringify(contas));
-  }catch(e){ /* preferência não será mantida entre sessões */ }
+  }catch(e){ /* preferência não será mantida entre sessões — provavelmente localStorage cheio (fotos ocupam espaço) */ }
 }
 function renderColorSwatches(){
   const row = document.getElementById('colorSwatchRow');
@@ -189,17 +196,83 @@ function renderColorSwatches(){
     row.appendChild(btn);
   });
 }
+
+// ---------- foto da conta (lida, redimensiona para quadrado e comprime) ----------
+function resizeImageToDataUrl(file, size){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function setPhotoPreview(dataUrl){
+  const preview = document.getElementById('photoPreview');
+  const removeBtn = document.getElementById('photoRemoveBtn');
+  if(dataUrl){
+    preview.innerHTML = `<img src="${dataUrl}" alt="">`;
+    removeBtn.hidden = false;
+  } else {
+    preview.innerHTML = '<span class="photo-placeholder" id="photoPlaceholder">＋</span>';
+    removeBtn.hidden = true;
+  }
+}
+document.getElementById('photoBtnTrigger').addEventListener('click', ()=>{
+  document.getElementById('fContaFoto').click();
+});
+document.getElementById('fContaFoto').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    pendingFotoDataUrl = await resizeImageToDataUrl(file, 160);
+    setPhotoPreview(pendingFotoDataUrl);
+  }catch(err){
+    document.getElementById('accountMsg').textContent = 'Não foi possível carregar essa foto.';
+  }
+  e.target.value = '';
+});
+document.getElementById('photoRemoveBtn').addEventListener('click', ()=>{
+  pendingFotoDataUrl = null;
+  setPhotoPreview(null);
+});
+
+function accountAvatarHTML(conta){
+  if(conta.foto){
+    return `<img class="account-avatar" src="${conta.foto}" alt="">`;
+  }
+  const inicial = (conta.nome || '?').trim().charAt(0).toUpperCase();
+  return `<span class="account-avatar-fallback" style="background:${conta.cor}">${inicial}</span>`;
+}
 function renderAccountList(){
   const list = document.getElementById('accountList');
   const emptyNote = document.getElementById('accountEmptyNote');
   list.querySelectorAll('.account-row').forEach(el=> el.remove());
   emptyNote.hidden = contas.length > 0;
   contas.forEach(conta=>{
+    const moeda = MOEDA_INFO[conta.moeda] || MOEDA_INFO.BRL;
     const row = document.createElement('div');
     row.className = 'account-row';
     row.innerHTML = `
-      <span class="account-dot" style="background:${conta.cor}"></span>
-      <span class="account-name">${conta.nome}</span>
+      ${accountAvatarHTML(conta)}
+      <span class="account-info">
+        <span class="account-name">${conta.nome}</span>
+        <span class="account-moeda">${moeda.simbolo} ${moeda.label}</span>
+      </span>
       <button type="button" class="account-del-btn" title="Excluir conta" aria-label="Excluir conta ${conta.nome}">×</button>
     `;
     row.querySelector('.account-del-btn').addEventListener('click', async ()=>{
@@ -210,6 +283,36 @@ function renderAccountList(){
     list.appendChild(row);
   });
 }
+// ---------- abrir/fechar sheet de nova conta (centralizado, igual ao de lançamentos) ----------
+const accountSheet = document.getElementById('accountSheet');
+const accountOverlay = document.getElementById('accountOverlay');
+const addAccountBtn = document.getElementById('addAccountBtn');
+
+function resetAccountForm(){
+  document.getElementById('fContaNome').value = '';
+  document.getElementById('fContaMoeda').value = 'BRL';
+  document.querySelectorAll('.color-swatch').forEach((s, i)=> s.classList.toggle('active', i === 0));
+  pendingFotoDataUrl = null;
+  setPhotoPreview(null);
+  document.getElementById('accountMsg').textContent = '';
+}
+function openAccountSheet(){
+  resetAccountForm();
+  accountSheet.classList.add('open');
+  accountOverlay.classList.add('open');
+  accountSheet.setAttribute('aria-hidden', 'false');
+  setTimeout(()=> document.getElementById('fContaNome').focus(), 80);
+}
+function closeAccountSheet(){
+  accountSheet.classList.remove('open');
+  accountOverlay.classList.remove('open');
+  accountSheet.setAttribute('aria-hidden', 'true');
+}
+addAccountBtn.addEventListener('click', openAccountSheet);
+document.getElementById('accountSheetCloseBtn').addEventListener('click', closeAccountSheet);
+document.getElementById('accountCancelBtn').addEventListener('click', closeAccountSheet);
+accountOverlay.addEventListener('click', closeAccountSheet);
+
 document.getElementById('accountForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
   const msg = document.getElementById('accountMsg');
@@ -226,14 +329,13 @@ document.getElementById('accountForm').addEventListener('submit', async (e)=>{
   msg.textContent = '';
   const corAtiva = document.querySelector('.color-swatch.active');
   const cor = corAtiva ? corAtiva.dataset.cor : CONTA_CORES[0];
+  const moeda = document.getElementById('fContaMoeda').value;
 
-  contas.push({ id: uid(), nome, cor });
+  contas.push({ id: uid(), nome, cor, moeda, foto: pendingFotoDataUrl });
   await saveContas();
   renderAccountList();
 
-  nomeInput.value = '';
-  document.querySelectorAll('.color-swatch').forEach((s, i)=> s.classList.toggle('active', i === 0));
-  nomeInput.focus();
+  closeAccountSheet();
 });
 
 // ---------- recorrência ----------
@@ -359,15 +461,18 @@ function renderRecentList(list){
 
   container.innerHTML = recent.map(t=>{
     const dataFmt = new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
-    const isReceita = t.tipo === 'Receita';
+    const cls = tipoClass(t.tipo);
+    const sign = tipoSign(t.tipo);
+    const nome = t.tipo === 'Transferencia' ? (t.descricao || 'Transferência') : (t.descricao || t.subcategoria);
+    const sub = t.tipo === 'Transferencia' ? `${contaNome(t.contaOrigemId)} → ${contaNome(t.contaDestinoId)}` : `${dataFmt} · ${t.categoria}`;
     return `
       <button type="button" class="recent-row" data-id="${t.id}" data-date="${t.data}">
-        <span class="recent-icon ${isReceita ? 'receita' : 'despesa'}">${isReceita ? '+' : '−'}</span>
+        <span class="recent-icon ${cls}">${sign}</span>
         <span class="recent-info">
-          <span class="recent-name">${t.descricao || t.subcategoria}</span>
-          <span class="recent-sub">${dataFmt} · ${t.categoria}</span>
+          <span class="recent-name">${nome}</span>
+          <span class="recent-sub">${sub}</span>
         </span>
-        <span class="recent-val ${isReceita ? 'receita' : 'despesa'}">${isReceita ? '+' : '−'} ${fmtBRL(t.valor)}</span>
+        <span class="recent-val ${cls}">${sign} ${fmtBRL(t.valor)}</span>
       </button>`;
   }).join('');
 
@@ -389,13 +494,15 @@ function render(){
 
   document.getElementById('totReceitas').textContent = fmtBRL(receitas);
   document.getElementById('totDespesas').textContent = fmtBRL(despesas);
-  document.getElementById('totSaldo').textContent = fmtBRL(saldo);
+  const totSaldoEl = document.getElementById('totSaldo');
+  totSaldoEl.textContent = fmtBRL(saldo);
+  totSaldoEl.style.color = saldo >= 0 ? 'var(--color-receita)' : 'var(--color-despesa)';
 
   const stamp = document.getElementById('stamp');
   const stampVerdict = document.getElementById('stampVerdict');
   const balanceWord = document.getElementById('balanceWord');
   const positive = saldo >= 0;
-  stamp.style.setProperty('--sc', positive ? 'var(--green)' : 'var(--rust)');
+  stamp.style.setProperty('--sc', positive ? 'var(--color-receita)' : 'var(--color-despesa)');
   stampVerdict.textContent = positive ? 'positivo' : 'negativo';
   if(list.length === 0){
     balanceWord.textContent = 'Registre um lançamento para começar a página deste mês.';
@@ -434,14 +541,19 @@ function render(){
     const num = String(i+1).padStart(3,'0');
     const isRecurring = (t.repeticao || 'nenhuma') !== 'nenhuma';
     const recurBadge = isRecurring ? `<span class="recur-badge" title="${repeatLabel(t)}">↻</span>` : '';
+    const cls = tipoClass(t.tipo);
+    const sign = tipoSign(t.tipo);
+    const catCellHTML = t.tipo === 'Transferencia'
+      ? `${contaNome(t.contaOrigemId)}<span class="sub">→ ${contaNome(t.contaDestinoId)}</span>`
+      : `${t.categoria}<span class="sub">${t.subcategoria}</span>`;
     return `
       <button type="button" class="ledger-row" data-id="${t.id}" data-date="${t.data}">
         <span class="entry-no"><span class="badge">Nº ${num}</span></span>
         <span>${dataFmt}${recurBadge}</span>
-        <span><span class="tipo-tag ${t.tipo==='Receita'?'receita':'despesa'}">${t.tipo}</span></span>
-        <span class="cat-cell">${t.categoria}<span class="sub">${t.subcategoria}</span></span>
+        <span><span class="tipo-tag ${cls}">${tipoLabel(t.tipo)}</span></span>
+        <span class="cat-cell">${catCellHTML}</span>
         <span class="desc-cell">${t.descricao || '—'}</span>
-        <span class="val-cell ${t.tipo==='Receita'?'receita':'despesa'}">${t.tipo==='Receita'?'+':'−'} ${fmtBRL(t.valor)}</span>
+        <span class="val-cell ${cls}">${sign} ${fmtBRL(t.valor)}</span>
       </button>`;
   }).join('');
 
@@ -464,8 +576,6 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   const msg = document.getElementById('formMsg');
   const data = document.getElementById('fData').value;
   const tipo = document.getElementById('fTipo').value;
-  const categoria = document.getElementById('fCategoria').value;
-  const subcategoria = document.getElementById('fSubcategoria').value;
   const descricao = document.getElementById('fDescricao').value.trim();
   const valor = parseFloat(document.getElementById('fValor').value);
 
@@ -483,6 +593,38 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
     msg.textContent = 'Selecione a data do lançamento.';
     return;
   }
+
+  if(tipo === 'Transferencia'){
+    const contaOrigemId = document.getElementById('fContaOrigem').value;
+    const contaDestinoId = document.getElementById('fContaDestino').value;
+    if(contas.length < 2){
+      msg.textContent = 'Cadastre pelo menos 2 contas para poder transferir.';
+      return;
+    }
+    if(!contaOrigemId || !contaDestinoId){
+      msg.textContent = 'Escolha a conta de origem e a de destino.';
+      return;
+    }
+    if(contaOrigemId === contaDestinoId){
+      msg.textContent = 'As contas de origem e destino precisam ser diferentes.';
+      return;
+    }
+    msg.textContent = '';
+
+    transactions.push({ id: uid(), data, tipo, contaOrigemId, contaDestinoId, descricao, valor, repeticao: 'nenhuma' });
+    await saveTransactions();
+
+    const d = new Date(data + 'T00:00:00');
+    periodState = { mode: 'mes', anchorDate: toISODateLocal(new Date(d.getFullYear(), d.getMonth(), 1)) };
+    updatePeriodLabel();
+
+    render();
+    closeAddSheet();
+    return;
+  }
+
+  const categoria = document.getElementById('fCategoria').value;
+  const subcategoria = document.getElementById('fSubcategoria').value;
 
   const repeticao = currentRepeat; // 'nenhuma' | 'semanal' | 'mensal'
   let repetirAte = null;
@@ -520,6 +662,7 @@ document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
   if(periodSheet.classList.contains('open')) closePeriodSheet();
   else if(addSheet.classList.contains('open')) closeAddSheet();
+  else if(accountSheet.classList.contains('open')) closeAccountSheet();
   else if(detailSheet.classList.contains('open')) closeDetail();
   else if(fabWrap.classList.contains('open')) closeSpeedDial();
 });
@@ -545,19 +688,34 @@ function openDetail(id, occurrenceDate){
   if(!t) return;
   openDetailId = id;
 
-  const isReceita = t.tipo === 'Receita';
+  const isTransferencia = t.tipo === 'Transferencia';
   const displayDate = occurrenceDate || t.data;
-  document.getElementById('detailTitle').textContent = t.descricao || t.subcategoria;
+  document.getElementById('detailTitle').textContent = isTransferencia
+    ? (t.descricao || 'Transferência')
+    : (t.descricao || t.subcategoria);
   document.getElementById('detailData').textContent = new Date(displayDate+'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
-  document.getElementById('detailTipo').textContent = t.tipo;
-  document.getElementById('detailCategoria').textContent = t.categoria;
-  document.getElementById('detailSubcategoria').textContent = t.subcategoria;
+  document.getElementById('detailTipo').textContent = tipoLabel(t.tipo);
+
+  if(isTransferencia){
+    document.getElementById('detailCategoriaLabel').textContent = 'De (conta)';
+    document.getElementById('detailSubcategoriaLabel').textContent = 'Para (conta)';
+    document.getElementById('detailCategoria').textContent = contaNome(t.contaOrigemId);
+    document.getElementById('detailSubcategoria').textContent = contaNome(t.contaDestinoId);
+  } else {
+    document.getElementById('detailCategoriaLabel').textContent = 'Categoria';
+    document.getElementById('detailSubcategoriaLabel').textContent = 'Subcategoria';
+    document.getElementById('detailCategoria').textContent = t.categoria;
+    document.getElementById('detailSubcategoria').textContent = t.subcategoria;
+  }
+
   document.getElementById('detailDescricao').textContent = t.descricao || '—';
-  document.getElementById('detailRepeticao').textContent = repeatLabel(t);
+  document.getElementById('detailRepeticao').textContent = isTransferencia ? 'Não repete' : repeatLabel(t);
   const valorEl = document.getElementById('detailValor');
-  valorEl.textContent = (isReceita ? '+ ' : '− ') + fmtBRL(t.valor);
-  valorEl.classList.toggle('receita', isReceita);
-  valorEl.classList.toggle('despesa', !isReceita);
+  const cls = tipoClass(t.tipo);
+  const sign = tipoSign(t.tipo);
+  valorEl.textContent = sign + ' ' + fmtBRL(t.valor);
+  valorEl.classList.remove('receita', 'despesa', 'transferencia');
+  valorEl.classList.add(cls);
 
   const note = document.getElementById('detailNote');
   note.textContent = (t.repeticao && t.repeticao !== 'nenhuma')
@@ -698,14 +856,63 @@ function resetRepeatFields(){
   document.getElementById('fRepeatEndDate').value = '';
 }
 
+function populateContaSelects(){
+  const selOrigem = document.getElementById('fContaOrigem');
+  const selDestino = document.getElementById('fContaDestino');
+  selOrigem.innerHTML = '';
+  selDestino.innerHTML = '';
+  contas.forEach(conta=>{
+    const optA = document.createElement('option');
+    optA.value = conta.id; optA.textContent = conta.nome;
+    selOrigem.appendChild(optA);
+    const optB = document.createElement('option');
+    optB.value = conta.id; optB.textContent = conta.nome;
+    selDestino.appendChild(optB);
+  });
+  if(contas.length > 1) selDestino.selectedIndex = 1;
+}
+function contaNome(id){
+  const c = contas.find(c=> c.id === id);
+  return c ? c.nome : 'Conta removida';
+}
+function tipoClass(tipo){
+  if(tipo === 'Receita') return 'receita';
+  if(tipo === 'Transferencia') return 'transferencia';
+  return 'despesa';
+}
+function tipoSign(tipo){
+  if(tipo === 'Receita') return '+';
+  if(tipo === 'Transferencia') return '⇄';
+  return '−';
+}
+function tipoLabel(tipo){
+  if(tipo === 'Transferencia') return 'Transferência';
+  return tipo;
+}
+
 function openAddSheet(tipo){
   document.getElementById('fTipo').value = tipo;
   const isReceita = tipo === 'Receita';
-  addSheetTitle.textContent = isReceita ? 'Nova receita' : 'Nova despesa';
+  const isTransferencia = tipo === 'Transferencia';
+  const titles = { Receita: 'Nova receita', Despesa: 'Nova despesa', Transferencia: 'Nova transferência' };
+  addSheetTitle.textContent = titles[tipo];
   addSheetBand.classList.toggle('receita', isReceita);
-  addSheetBand.classList.toggle('despesa', !isReceita);
+  addSheetBand.classList.toggle('despesa', tipo === 'Despesa');
+  addSheetBand.classList.toggle('transferencia', isTransferencia);
 
-  populateCategoriaSelect();
+  document.getElementById('camposCategoria').hidden = isTransferencia;
+  document.getElementById('camposTransferencia').hidden = !isTransferencia;
+  document.getElementById('camposRepetir').hidden = isTransferencia;
+  document.getElementById('repeatUntilField').hidden = true;
+  const avisoContas = document.getElementById('transferAvisoContas');
+  if(isTransferencia){
+    populateContaSelects();
+    avisoContas.hidden = contas.length >= 2;
+  } else {
+    avisoContas.hidden = true;
+    populateCategoriaSelect();
+  }
+
   setQuickDate('hoje');
   resetRepeatFields();
   document.getElementById('fDescricao').value = '';

@@ -94,6 +94,24 @@
     </section>
   </main>
 
+  <!-- ===================== VIEW: CONTAS ===================== -->
+  <main class="view" id="viewContas" aria-labelledby="titleContas">
+    <h1 class="view-title" id="titleContas">Contas</h1>
+
+    <section class="settings-card">
+      <span class="tab">Bancos</span>
+      <div class="settings-card-head">
+        <h2>Suas contas</h2>
+        <button type="button" class="add-account-btn" id="addAccountBtn" aria-label="Adicionar conta">+</button>
+      </div>
+      <p class="settings-desc">Cadastre os bancos ou contas que você usa para lançar receitas e despesas.</p>
+
+      <div class="account-list" id="accountList">
+        <p class="empty-note" id="accountEmptyNote">Nenhuma conta cadastrada ainda.</p>
+      </div>
+    </section>
+  </main>
+
   <!-- ===================== VIEW: CONFIGURAÇÕES ===================== -->
   <main class="view" id="viewConfiguracoes" aria-labelledby="titleConfiguracoes">
     <h1 class="view-title" id="titleConfiguracoes">Configurações</h1>
@@ -112,29 +130,6 @@
           <span>Escuro</span>
         </button>
       </div>
-    </section>
-
-    <section class="settings-card">
-      <span class="tab">Contas</span>
-      <h2>Suas contas</h2>
-      <p class="settings-desc">Cadastre os bancos ou contas que você usa para lançar receitas e despesas.</p>
-
-      <div class="account-list" id="accountList">
-        <p class="empty-note" id="accountEmptyNote">Nenhuma conta cadastrada ainda.</p>
-      </div>
-
-      <form class="account-form" id="accountForm">
-        <div class="field">
-          <label for="fContaNome">Nome da conta</label>
-          <input type="text" id="fContaNome" placeholder="Ex.: Banco do Brasil" maxlength="30" required autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Cor</label>
-          <div class="color-swatch-row" id="colorSwatchRow"></div>
-        </div>
-        <button type="submit" class="submit-btn">Adicionar conta</button>
-      </form>
-      <p class="form-msg" id="accountMsg"></p>
     </section>
   </main>
 
@@ -156,6 +151,16 @@
         <line x1="4" y1="6" x2="20" y2="6"></line>
         <line x1="4" y1="12" x2="20" y2="12"></line>
         <line x1="4" y1="18" x2="20" y2="18"></line>
+      </svg>
+    </span>
+  </button>
+  <button class="nav-item" data-view="contas" title="Contas" aria-label="Contas">
+    <span class="nav-glyph">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" stroke="none">
+        <circle cx="9" cy="8" r="3.5"></circle>
+        <path d="M2.5 20a6.5 6.5 0 0 1 13 0Z"></path>
+        <circle cx="17" cy="8.5" r="2.8"></circle>
+        <path d="M15.7 13.2A6.5 6.5 0 0 1 21.5 20h-4.2a7.9 7.9 0 0 0-1.6-6.8Z"></path>
       </svg>
     </span>
   </button>
@@ -189,11 +194,11 @@
       <dd id="detailTipo">—</dd>
     </div>
     <div>
-      <dt>Categoria</dt>
+      <dt id="detailCategoriaLabel">Categoria</dt>
       <dd id="detailCategoria">—</dd>
     </div>
     <div>
-      <dt>Subcategoria</dt>
+      <dt id="detailSubcategoriaLabel">Subcategoria</dt>
       <dd id="detailSubcategoria">—</dd>
     </div>
     <div class="full">
@@ -217,6 +222,10 @@
 <div class="fab-overlay" id="fabOverlay"></div>
 <div class="fab-wrap" id="fabWrap">
   <div class="speed-dial" id="speedDial">
+    <button type="button" class="speed-option transferencia" data-tipo="Transferencia">
+      <span class="speed-label">Transferência</span>
+      <span class="speed-icon">⇄</span>
+    </button>
     <button type="button" class="speed-option receita" data-tipo="Receita">
       <span class="speed-label">Receita</span>
       <span class="speed-icon">+</span>
@@ -249,7 +258,7 @@
       <label for="fDescricao">Nome</label>
       <input type="text" id="fDescricao" placeholder="Nome da transação…">
     </div>
-    <div class="field-row">
+    <div class="field-row" id="camposCategoria">
       <div class="field">
         <label for="fCategoria">Categoria</label>
         <select id="fCategoria" required></select>
@@ -259,6 +268,17 @@
         <select id="fSubcategoria" required></select>
       </div>
     </div>
+    <div class="field-row" id="camposTransferencia" hidden>
+      <div class="field">
+        <label for="fContaOrigem">De (conta)</label>
+        <select id="fContaOrigem"></select>
+      </div>
+      <div class="field">
+        <label for="fContaDestino">Para (conta)</label>
+        <select id="fContaDestino"></select>
+      </div>
+    </div>
+    <p class="form-msg" id="transferAvisoContas" hidden>Cadastre pelo menos 2 contas em "Contas" para poder transferir entre elas.</p>
     <div class="field">
       <label>Data</label>
       <div class="date-quick" id="dateQuick">
@@ -269,7 +289,7 @@
       <input type="hidden" id="fData" required>
       <div class="cal-slot" id="calSlotEntryDate" hidden></div>
     </div>
-    <div class="field">
+    <div class="field" id="camposRepetir">
       <label>Repetir</label>
       <div class="date-quick" id="repeatQuick">
         <button type="button" class="date-pill active" data-repeat="nenhuma">Não repete</button>
@@ -307,6 +327,53 @@
     <span>dom</span><span>seg</span><span>ter</span><span>qua</span><span>qui</span><span>sex</span><span>sáb</span>
   </div>
   <div class="cal-grid" id="calGrid"></div>
+</div>
+
+<!-- ===================== ACCOUNT SHEET (nova conta, centralizado) ===================== -->
+<div class="add-overlay" id="accountOverlay"></div>
+<div class="add-sheet" id="accountSheet" role="dialog" aria-modal="true" aria-labelledby="accountSheetTitle" aria-hidden="true">
+  <div class="add-sheet-band conta" id="accountSheetBand">
+    <div class="add-sheet-band-top">
+      <span class="add-sheet-tipo" id="accountSheetTitle">Nova conta</span>
+      <button type="button" class="nav-close" id="accountSheetCloseBtn" aria-label="Fechar">×</button>
+    </div>
+  </div>
+  <form id="accountForm" class="add-sheet-form">
+    <div class="field">
+      <label>Foto</label>
+      <div class="photo-picker">
+        <div class="photo-preview" id="photoPreview">
+          <span class="photo-placeholder" id="photoPlaceholder">＋</span>
+        </div>
+        <div class="photo-picker-actions">
+          <button type="button" class="photo-btn" id="photoBtnTrigger">Escolher foto</button>
+          <button type="button" class="photo-remove-btn" id="photoRemoveBtn" hidden>Remover</button>
+          <input type="file" id="fContaFoto" accept="image/*" hidden>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fContaNome">Nome da conta</label>
+      <input type="text" id="fContaNome" placeholder="Ex.: Banco do Brasil" maxlength="30" required autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="fContaMoeda">Moeda</label>
+      <select id="fContaMoeda" required>
+        <option value="BRL">Real (R$)</option>
+        <option value="USD">Dólar (US$)</option>
+        <option value="JPY">Iene (¥)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Cor</label>
+      <div class="color-swatch-row" id="colorSwatchRow"></div>
+    </div>
+    <p class="form-msg" id="accountMsg"></p>
+    <div class="add-sheet-actions">
+      <button type="button" class="cancel-btn" id="accountCancelBtn">Cancelar</button>
+      <button type="submit" class="submit-btn wide">Adicionar</button>
+    </div>
+  </form>
 </div>
 
 <!-- ===================== PERIOD SHEET (seletor de período) ===================== -->
