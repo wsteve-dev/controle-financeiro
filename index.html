@@ -29,7 +29,14 @@
 
   <!-- ===================== VIEW: RESUMO ===================== -->
   <main class="view active" id="viewResumo" aria-labelledby="titleResumo">
-    <h1 class="view-title" id="titleResumo">Dashboard</h1>
+    <div class="view-head-row">
+      <h1 class="view-title" id="titleResumo">Dashboard</h1>
+      <button type="button" class="conta-btn" id="contaBtn" aria-haspopup="dialog">
+        <span class="conta-btn-avatar" id="contaBtnAvatar">Ⓐ</span>
+        <span id="contaBtnLabel">Todas as contas</span>
+        <span class="period-chevron">⌄</span>
+      </button>
+    </div>
 
     <section class="spread">
       <div class="fold"><div class="stitch"></div></div>
@@ -129,6 +136,10 @@
           <span class="theme-swatch dark"></span>
           <span>Escuro</span>
         </button>
+        <button type="button" class="theme-option" data-theme="vidro" role="radio" aria-checked="false">
+          <span class="theme-swatch glass"></span>
+          <span>Vidro</span>
+        </button>
       </div>
     </section>
   </main>
@@ -209,6 +220,10 @@
       <dt>Repetição</dt>
       <dd id="detailRepeticao">—</dd>
     </div>
+    <div class="full" id="detailConversaoRow" hidden>
+      <dt>Conversão</dt>
+      <dd id="detailConversao">—</dd>
+    </div>
     <div class="full">
       <dt>Valor</dt>
       <dd id="detailValor" class="detail-valor">—</dd>
@@ -248,7 +263,7 @@
     </div>
     <label class="add-valor-label" for="fValor">Valor</label>
     <div class="add-valor-row">
-      <span class="add-valor-prefix">R$</span>
+      <span class="add-valor-prefix" id="addValorPrefix">R$</span>
       <input type="number" id="fValor" step="0.01" min="0" placeholder="0,00" required inputmode="decimal" autocomplete="off">
     </div>
   </div>
@@ -268,6 +283,12 @@
         <select id="fSubcategoria" required></select>
       </div>
     </div>
+    <div class="field" id="camposConta">
+      <label for="fConta">Conta</label>
+      <select id="fConta">
+        <option value="">Sem conta específica</option>
+      </select>
+    </div>
     <div class="field-row" id="camposTransferencia" hidden>
       <div class="field">
         <label for="fContaOrigem">De (conta)</label>
@@ -278,7 +299,13 @@
         <select id="fContaDestino"></select>
       </div>
     </div>
-    <p class="form-msg" id="transferAvisoContas" hidden>Cadastre pelo menos 2 contas em "Contas" para poder transferir entre elas.</p>
+    <div class="field conversion-field" id="camposConversao" hidden>
+      <label for="fTaxaConversao" id="conversionLabel">Taxa de conversão</label>
+      <input type="number" id="fTaxaConversao" step="0.00001" min="0" placeholder="0,00000" inputmode="decimal">
+      <p class="conversion-preview" id="conversionPreview"></p>
+    </div>
+    <p class="form-msg" id="transferAvisoContas" hidden>Cadastre pelo menos 2 contas com a mesma moeda em "Contas" para poder transferir entre elas.</p>
+    <p class="form-msg" id="transferAvisoMoeda" hidden>Não há outra conta com a mesma moeda desta para transferir. Cadastre uma em "Contas".</p>
     <div class="field">
       <label>Data</label>
       <div class="date-quick" id="dateQuick">
@@ -374,6 +401,16 @@
       <button type="submit" class="submit-btn wide">Adicionar</button>
     </div>
   </form>
+</div>
+
+<!-- ===================== CONTA SHEET (filtro de conta no Dashboard) ===================== -->
+<div class="conta-overlay" id="contaOverlay"></div>
+<div class="conta-sheet" id="contaSheet" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="conta-sheet-head">
+    <span class="eyebrow" style="margin:0;">Filtrar por conta</span>
+    <button type="button" class="nav-close" id="contaSheetCloseBtn" aria-label="Fechar">×</button>
+  </div>
+  <div class="conta-sheet-list" id="contaSheetList"></div>
 </div>
 
 <!-- ===================== PERIOD SHEET (seletor de período) ===================== -->

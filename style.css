@@ -46,6 +46,29 @@
     --paper-glow-2: rgba(216,176,106,0.06);
     --paper-line: rgba(0,0,0,0.4);
   }
+
+  :root[data-theme="glass"]{
+    --paper: rgba(255,255,255,0.06);
+    --paper-2: rgba(255,255,255,0.14);
+    --paper-deep: rgba(255,255,255,0.04);
+    --ink: #ffffff;
+    --ink-soft: rgba(255,255,255,0.82);
+    --ink-faint: rgba(255,255,255,0.62);
+    --green: #2f7a55;
+    --green-2: #3f9a6c;
+    --green-light: #7fcf9e;
+    --gold: #c99a3a;
+    --gold-light: #e6bd63;
+    --rust: #b5493c;
+    --rust-light: #d47c6d;
+    --rule: rgba(255,255,255,0.32);
+    --rule-strong: rgba(255,255,255,0.5);
+    --white: rgba(255,255,255,0.16);
+    --shadow-color: 10, 20, 15;
+    --paper-glow: transparent;
+    --paper-glow-2: transparent;
+    --paper-line: transparent;
+  }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
 
@@ -64,6 +87,39 @@
     transition: background-color 0.3s ease, color 0.3s ease;
   }
   .wrap{ max-width: 1000px; margin: 0 auto; }
+
+  /* ---------- tema Vidro: fundo colorido + efeito de vidro fosco nos painéis ---------- */
+  :root[data-theme="glass"] body{
+    background-color: #6bb87f;
+    background-image:
+      radial-gradient(circle at 20% 20%, #8fd9a8 0%, transparent 45%),
+      radial-gradient(circle at 80% 15%, #f5e08a 0%, transparent 40%),
+      radial-gradient(circle at 30% 80%, #6bb6d6 0%, transparent 45%),
+      radial-gradient(circle at 85% 75%, #e69a8d 0%, transparent 40%),
+      linear-gradient(160deg, #5aa876 0%, #79c08f 40%, #a9d9a0 100%);
+    background-attachment: fixed;
+  }
+  :root[data-theme="glass"] .spread,
+  :root[data-theme="glass"] .entry-card,
+  :root[data-theme="glass"] .ledger-card,
+  :root[data-theme="glass"] .settings-card,
+  :root[data-theme="glass"] .recent-card,
+  :root[data-theme="glass"] .side-nav,
+  :root[data-theme="glass"] .add-sheet,
+  :root[data-theme="glass"] .detail-sheet,
+  :root[data-theme="glass"] .brand-glyph,
+  :root[data-theme="glass"] .period-btn,
+  :root[data-theme="glass"] .conta-btn,
+  :root[data-theme="glass"] .menu-btn{
+    backdrop-filter: blur(20px) saturate(165%);
+    -webkit-backdrop-filter: blur(20px) saturate(165%);
+    border: 1.5px solid rgba(255,255,255,0.5);
+  }
+  :root[data-theme="glass"] .fab-btn{
+    backdrop-filter: blur(14px) saturate(165%);
+    -webkit-backdrop-filter: blur(14px) saturate(165%);
+    border: 2px solid rgba(255,255,255,0.6);
+  }
 
   ::selection{ background: var(--gold-light); color: var(--white); }
 
@@ -118,6 +174,64 @@
   .period-btn:hover{ background: var(--paper-2); }
   .period-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
   .period-chevron{ color: var(--gold); font-size: 13px; }
+
+  /* ---------- seletor de conta (Dashboard) ---------- */
+  .view-head-row{
+    display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .view-head-row .view-title{ margin-bottom: 0; }
+  .conta-btn{
+    display:flex; align-items:center; gap: 8px;
+    font-family:'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600;
+    background: var(--white); border: 1px solid var(--ink); color: var(--ink);
+    padding: 8px 12px; border-radius: 20px; cursor:pointer;
+    box-shadow: 0 2px 0 rgba(var(--shadow-color),0.15);
+    transition: background 0.15s ease;
+  }
+  .conta-btn:hover{ background: var(--paper-2); }
+  .conta-btn:focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+  .conta-btn-avatar{
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink:0; object-fit:cover;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 10px; font-weight:700; color: var(--white); background: var(--ink-soft);
+  }
+  .conta-btn-avatar img{ width:100%; height:100%; border-radius:50%; object-fit:cover; }
+
+  .conta-overlay{
+    position: fixed; inset: 0; background: rgba(20,18,10,0.45);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease; z-index: 62;
+  }
+  .conta-overlay.open{ opacity: 1; pointer-events: auto; }
+  .conta-sheet{
+    position: fixed; top: 50%; left: 50%; width: 90%; max-width: 380px;
+    transform: translate(-50%, -50%) scale(0.95);
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1);
+    background: var(--white); z-index: 65; border-radius: 14px;
+    box-shadow: 0 22px 50px rgba(var(--shadow-color),0.4);
+    max-height: 80vh; overflow-y: auto;
+    opacity: 0; pointer-events: none;
+    padding: 20px 20px 12px;
+  }
+  .conta-sheet.open{ opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+  .conta-sheet-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding-bottom: 14px; margin-bottom: 8px; border-bottom: 1px solid var(--rule);
+  }
+  .conta-sheet-list{ display:flex; flex-direction:column; gap: 4px; padding-bottom: 8px; }
+  .conta-option{
+    display:flex; align-items:center; gap: 12px; width:100%; text-align:left;
+    background:none; border:none; border-radius: 6px; cursor:pointer;
+    padding: 10px 8px; transition: background 0.12s ease;
+  }
+  .conta-option:hover{ background: rgba(47,74,60,0.06); }
+  .conta-option.active{ background: rgba(47,74,60,0.1); }
+  .conta-option:focus-visible{ outline: 2px solid var(--gold); outline-offset: -2px; }
+  .conta-option-avatar{
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink:0; object-fit:cover;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces', serif; font-weight:700; font-size: 12px; color: var(--white);
+  }
+  .conta-option-name{ font-size: 13.5px; color: var(--ink); }
 
   /* ---------- period sheet (seletor de período) — paleta fixa escura/azul,
      independente do tema claro/escuro do resto do site, para reproduzir a referência ---------- */
@@ -582,6 +696,10 @@
   }
   .theme-swatch.light{ background: #ece6d6; border: 1.5px solid #1e2a22; }
   .theme-swatch.dark{ background: #17140f; border: 1.5px solid #ece6d6; }
+  .theme-swatch.glass{
+    background: linear-gradient(135deg, #8fd9a8 0%, #f5e08a 35%, #6bb6d6 70%, #e69a8d 100%);
+    border: 1.5px solid rgba(255,255,255,.8);
+  }
   .theme-option.active .theme-swatch{ box-shadow: 0 0 0 3px var(--paper), 0 0 0 4.5px var(--green), 0 1px 3px rgba(var(--shadow-color),0.25); }
 
   /* ---------- contas ---------- */
@@ -875,6 +993,26 @@
     text-transform: uppercase; color: var(--ink-faint);
   }
   .repeat-until-field[hidden]{ display:none; }
+
+  .conversion-field{
+    margin-top: -6px; padding: 12px 14px; background: var(--paper); border-radius: 6px;
+    border: 1px solid var(--color-transferencia);
+  }
+  .conversion-field label{
+    font-family:'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--color-transferencia);
+  }
+  .conversion-field input{
+    font-family:'IBM Plex Sans', sans-serif; font-size: 14px; margin-top: 6px;
+    padding: 8px 2px; border: none; border-bottom: 1.5px solid var(--rule-strong);
+    background: transparent; color: var(--ink); width: 100%;
+  }
+  .conversion-field input:focus{ outline:none; border-bottom-color: var(--color-transferencia); }
+  .conversion-preview{
+    font-family:'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft);
+    margin: 8px 0 0;
+  }
+  .conversion-field[hidden]{ display:none; }
 
   .add-sheet-actions{ display:flex; gap: 12px; margin-top: 2px; }
   .cancel-btn{

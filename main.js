@@ -38,6 +38,7 @@ function toISODateLocal(d){
 
 // ---------- período ----------
 let periodState = { mode: 'mes', anchorDate: null };
+let selectedContaFilter = null; // null = todas as contas (usado no filtro do Dashboard)
 
 function computeRange(state){
   const today = new Date(); today.setHours(0,0,0,0);
@@ -278,11 +279,92 @@ function renderAccountList(){
     row.querySelector('.account-del-btn').addEventListener('click', async ()=>{
       contas = contas.filter(c=> c.id !== conta.id);
       await saveContas();
+      if(selectedContaFilter === conta.id){
+        selectedContaFilter = null;
+        updateContaBtnLabel();
+        render();
+      }
       renderAccountList();
     });
     list.appendChild(row);
   });
 }
+
+// ---------- seletor de conta no Dashboard ----------
+const contaBtn = document.getElementById('contaBtn');
+const contaSheet = document.getElementById('contaSheet');
+const contaOverlay = document.getElementById('contaOverlay');
+
+function updateContaBtnLabel(){
+  const label = document.getElementById('contaBtnLabel');
+  const avatar = document.getElementById('contaBtnAvatar');
+  if(!selectedContaFilter){
+    label.textContent = 'Todas as contas';
+    avatar.innerHTML = 'Ⓐ';
+    avatar.style.background = 'var(--ink-soft)';
+    return;
+  }
+  const conta = contas.find(c=> c.id === selectedContaFilter);
+  if(!conta){ selectedContaFilter = null; updateContaBtnLabel(); return; }
+  label.textContent = conta.nome;
+  if(conta.foto){
+    avatar.innerHTML = `<img src="${conta.foto}" alt="">`;
+  } else {
+    avatar.innerHTML = conta.nome.trim().charAt(0).toUpperCase();
+    avatar.style.background = conta.cor;
+  }
+}
+function contaOptionAvatarHTML(conta){
+  if(conta.foto){
+    return `<img class="conta-option-avatar" src="${conta.foto}" alt="">`;
+  }
+  const inicial = (conta.nome || '?').trim().charAt(0).toUpperCase();
+  return `<span class="conta-option-avatar" style="background:${conta.cor}">${inicial}</span>`;
+}
+function renderContaSheetList(){
+  const list = document.getElementById('contaSheetList');
+  list.innerHTML = '';
+
+  const todasBtn = document.createElement('button');
+  todasBtn.type = 'button';
+  todasBtn.className = 'conta-option' + (selectedContaFilter ? '' : ' active');
+  todasBtn.innerHTML = `<span class="conta-option-avatar" style="background:var(--ink-soft)">Ⓐ</span><span class="conta-option-name">Todas as contas</span>`;
+  todasBtn.addEventListener('click', ()=>{
+    selectedContaFilter = null;
+    updateContaBtnLabel();
+    closeContaSheet();
+    render();
+  });
+  list.appendChild(todasBtn);
+
+  contas.forEach(conta=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'conta-option' + (selectedContaFilter === conta.id ? ' active' : '');
+    btn.innerHTML = `${contaOptionAvatarHTML(conta)}<span class="conta-option-name">${conta.nome}</span>`;
+    btn.addEventListener('click', ()=>{
+      selectedContaFilter = conta.id;
+      updateContaBtnLabel();
+      closeContaSheet();
+      render();
+    });
+    list.appendChild(btn);
+  });
+}
+function openContaSheet(){
+  renderContaSheetList();
+  contaSheet.classList.add('open');
+  contaOverlay.classList.add('open');
+  contaSheet.setAttribute('aria-hidden', 'false');
+}
+function closeContaSheet(){
+  contaSheet.classList.remove('open');
+  contaOverlay.classList.remove('open');
+  contaSheet.setAttribute('aria-hidden', 'true');
+}
+contaBtn.addEventListener('click', openContaSheet);
+document.getElementById('contaSheetCloseBtn').addEventListener('click', closeContaSheet);
+contaOverlay.addEventListener('click', closeContaSheet);
 // ---------- abrir/fechar sheet de nova conta (centralizado, igual ao de lançamentos) ----------
 const accountSheet = document.getElementById('accountSheet');
 const accountOverlay = document.getElementById('accountOverlay');
@@ -461,8 +543,14 @@ function renderRecentList(list){
 
   container.innerHTML = recent.map(t=>{
     const dataFmt = new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
-    const cls = tipoClass(t.tipo);
-    const sign = tipoSign(t.tipo);
+    let cls = tipoClass(t.tipo);
+    let sign = tipoSign(t.tipo);
+    let valorExibido = t.valor;
+    // com uma conta selecionada, a transferência aparece como saída (origem) ou entrada (destino)
+    if(t.tipo === 'Transferencia' && selectedContaFilter){
+      if(t.contaOrigemId === selectedContaFilter){ cls = 'despesa'; sign = '−'; }
+      else if(t.contaDestinoId === selectedContaFilter){ cls = 'receita'; sign = '+'; valorExibido = t.valorConvertido || t.valor; }
+    }
     const nome = t.tipo === 'Transferencia' ? (t.descricao || 'Transferência') : (t.descricao || t.subcategoria);
     const sub = t.tipo === 'Transferencia' ? `${contaNome(t.contaOrigemId)} → ${contaNome(t.contaDestinoId)}` : `${dataFmt} · ${t.categoria}`;
     return `
@@ -472,7 +560,7 @@ function renderRecentList(list){
           <span class="recent-name">${nome}</span>
           <span class="recent-sub">${sub}</span>
         </span>
-        <span class="recent-val ${cls}">${sign} ${fmtBRL(t.valor)}</span>
+        <span class="recent-val ${cls}">${sign} ${fmtBRL(valorExibido)}</span>
       </button>`;
   }).join('');
 
@@ -485,11 +573,26 @@ document.getElementById('recentSeeAll').addEventListener('click', (e)=>{
   switchView('lancamento');
 });
 
+function pertenceAConta(t, contaId){
+  if(t.tipo === 'Transferencia') return t.contaOrigemId === contaId || t.contaDestinoId === contaId;
+  return t.contaId === contaId;
+}
+
 function render(){
   const list = filteredForPeriod();
+  const dashboardList = selectedContaFilter
+    ? list.filter(t=> pertenceAConta(t, selectedContaFilter))
+    : list;
 
-  const receitas = list.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+t.valor,0);
-  const despesas = list.filter(t=>t.tipo==='Despesa').reduce((s,t)=>s+t.valor,0);
+  let receitas = dashboardList.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+t.valor,0);
+  let despesas = dashboardList.filter(t=>t.tipo==='Despesa').reduce((s,t)=>s+t.valor,0);
+  // quando uma conta específica está selecionada, transferências contam como saída (na origem) ou entrada (no destino)
+  if(selectedContaFilter){
+    dashboardList.filter(t=>t.tipo==='Transferencia').forEach(t=>{
+      if(t.contaOrigemId === selectedContaFilter) despesas += t.valor;
+      if(t.contaDestinoId === selectedContaFilter) receitas += (t.valorConvertido || t.valor);
+    });
+  }
   const saldo = receitas - despesas;
 
   document.getElementById('totReceitas').textContent = fmtBRL(receitas);
@@ -504,7 +607,7 @@ function render(){
   const positive = saldo >= 0;
   stamp.style.setProperty('--sc', positive ? 'var(--color-receita)' : 'var(--color-despesa)');
   stampVerdict.textContent = positive ? 'positivo' : 'negativo';
-  if(list.length === 0){
+  if(dashboardList.length === 0){
     balanceWord.textContent = 'Registre um lançamento para começar a página deste mês.';
   } else if(positive){
     balanceWord.textContent = saldo === 0
@@ -516,13 +619,13 @@ function render(){
 
   // categorias (donut de despesas)
   const porCategoria = {};
-  list.filter(t=>t.tipo==='Despesa').forEach(t=>{
+  dashboardList.filter(t=>t.tipo==='Despesa').forEach(t=>{
     porCategoria[t.categoria] = (porCategoria[t.categoria]||0) + t.valor;
   });
   renderDonut(porCategoria);
-  renderRecentList(list);
+  renderRecentList(dashboardList);
 
-  // ledger table
+  // ledger table (aba Lançamento — não é afetada pelo filtro de conta do Dashboard)
   const ledgerBody = document.getElementById('ledgerBody');
   const count = document.getElementById('ledgerCount');
   count.textContent = list.length + (list.length===1 ? ' registro' : ' registros');
@@ -597,8 +700,8 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   if(tipo === 'Transferencia'){
     const contaOrigemId = document.getElementById('fContaOrigem').value;
     const contaDestinoId = document.getElementById('fContaDestino').value;
-    if(contas.length < 2){
-      msg.textContent = 'Cadastre pelo menos 2 contas para poder transferir.';
+    if(!existeParDeContasMesmaMoeda()){
+      msg.textContent = 'Cadastre pelo menos 2 contas com a mesma moeda para poder transferir.';
       return;
     }
     if(!contaOrigemId || !contaDestinoId){
@@ -609,9 +712,30 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
       msg.textContent = 'As contas de origem e destino precisam ser diferentes.';
       return;
     }
+    if(contaMoeda(contaOrigemId) !== contaMoeda(contaDestinoId)){
+      msg.textContent = 'As contas de origem e destino precisam ter a mesma moeda.';
+      return;
+    }
+
+    let taxaConversao = null, valorConvertido = null, moedaOrigem = null, moedaDestino = null;
+    const precisaConversao = !document.getElementById('camposConversao').hidden;
+    if(precisaConversao){
+      moedaOrigem = contaMoeda(contaOrigemId);
+      moedaDestino = contaMoeda(contaDestinoId);
+      taxaConversao = parseFloat(document.getElementById('fTaxaConversao').value);
+      if(!taxaConversao || taxaConversao <= 0){
+        msg.textContent = 'Informe a taxa de conversão entre as moedas.';
+        document.getElementById('fTaxaConversao').focus();
+        return;
+      }
+      valorConvertido = valor * taxaConversao;
+    }
     msg.textContent = '';
 
-    transactions.push({ id: uid(), data, tipo, contaOrigemId, contaDestinoId, descricao, valor, repeticao: 'nenhuma' });
+    transactions.push({
+      id: uid(), data, tipo, contaOrigemId, contaDestinoId, descricao, valor, repeticao: 'nenhuma',
+      moedaOrigem, moedaDestino, taxaConversao, valorConvertido
+    });
     await saveTransactions();
 
     const d = new Date(data + 'T00:00:00');
@@ -625,6 +749,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
 
   const categoria = document.getElementById('fCategoria').value;
   const subcategoria = document.getElementById('fSubcategoria').value;
+  const contaId = document.getElementById('fConta').value || null;
 
   const repeticao = currentRepeat; // 'nenhuma' | 'semanal' | 'mensal'
   let repetirAte = null;
@@ -645,7 +770,7 @@ document.getElementById('entryForm').addEventListener('submit', async (e)=>{
   }
   msg.textContent = '';
 
-  transactions.push({ id: uid(), data, tipo, categoria, subcategoria, descricao, valor, repeticao, repetirAte, repetirDataFim });
+  transactions.push({ id: uid(), data, tipo, categoria, subcategoria, contaId, descricao, valor, repeticao, repetirAte, repetirDataFim });
   await saveTransactions();
 
   // muda a visão de período para o mês do novo lançamento, para que ele fique visível de imediato
@@ -663,6 +788,7 @@ document.addEventListener('keydown', (e)=>{
   if(periodSheet.classList.contains('open')) closePeriodSheet();
   else if(addSheet.classList.contains('open')) closeAddSheet();
   else if(accountSheet.classList.contains('open')) closeAccountSheet();
+  else if(contaSheet.classList.contains('open')) closeContaSheet();
   else if(detailSheet.classList.contains('open')) closeDetail();
   else if(fabWrap.classList.contains('open')) closeSpeedDial();
 });
@@ -710,6 +836,18 @@ function openDetail(id, occurrenceDate){
 
   document.getElementById('detailDescricao').textContent = t.descricao || '—';
   document.getElementById('detailRepeticao').textContent = isTransferencia ? 'Não repete' : repeatLabel(t);
+
+  const conversaoRow = document.getElementById('detailConversaoRow');
+  if(isTransferencia && t.taxaConversao){
+    const infoOrigem = MOEDA_INFO[t.moedaOrigem] || MOEDA_INFO.BRL;
+    const infoDestino = MOEDA_INFO[t.moedaDestino] || MOEDA_INFO.BRL;
+    conversaoRow.hidden = false;
+    document.getElementById('detailConversao').textContent =
+      `1 ${t.moedaOrigem} = ${t.taxaConversao} ${t.moedaDestino} · ${infoDestino.simbolo} ${t.valorConvertido.toLocaleString('pt-BR',{minimumFractionDigits:2})} recebidos em ${infoDestino.label}`;
+  } else {
+    conversaoRow.hidden = true;
+  }
+
   const valorEl = document.getElementById('detailValor');
   const cls = tipoClass(t.tipo);
   const sign = tipoSign(t.tipo);
@@ -858,19 +996,119 @@ function resetRepeatFields(){
 
 function populateContaSelects(){
   const selOrigem = document.getElementById('fContaOrigem');
-  const selDestino = document.getElementById('fContaDestino');
   selOrigem.innerHTML = '';
-  selDestino.innerHTML = '';
   contas.forEach(conta=>{
-    const optA = document.createElement('option');
-    optA.value = conta.id; optA.textContent = conta.nome;
-    selOrigem.appendChild(optA);
-    const optB = document.createElement('option');
-    optB.value = conta.id; optB.textContent = conta.nome;
-    selDestino.appendChild(optB);
+    const opt = document.createElement('option');
+    opt.value = conta.id; opt.textContent = conta.nome;
+    selOrigem.appendChild(opt);
   });
-  if(contas.length > 1) selDestino.selectedIndex = 1;
+  populateContaDestinoOptions();
+  updateConversionField();
 }
+function populateContaDestinoOptions(){
+  const selOrigem = document.getElementById('fContaOrigem');
+  const selDestino = document.getElementById('fContaDestino');
+  const origemId = selOrigem.value;
+  const moedaOrigem = contaMoeda(origemId);
+  const contaAvisoMoeda = document.getElementById('transferAvisoMoeda');
+  const currentDestino = selDestino.value;
+
+  // só mostra contas de destino com a MESMA moeda da conta de origem
+  const candidatos = contas.filter(c=> c.id !== origemId && c.moeda === moedaOrigem);
+
+  selDestino.innerHTML = '';
+  candidatos.forEach(conta=>{
+    const opt = document.createElement('option');
+    opt.value = conta.id; opt.textContent = conta.nome;
+    selDestino.appendChild(opt);
+  });
+  if(candidatos.some(c=> c.id === currentDestino)) selDestino.value = currentDestino;
+
+  contaAvisoMoeda.hidden = candidatos.length > 0;
+}
+document.getElementById('fContaOrigem').addEventListener('change', ()=>{
+  populateContaDestinoOptions();
+  updateConversionField();
+  updateValorPrefix();
+});
+function existeParDeContasMesmaMoeda(){
+  const contagem = {};
+  contas.forEach(c=>{ contagem[c.moeda] = (contagem[c.moeda] || 0) + 1; });
+  return Object.values(contagem).some(n=> n >= 2);
+}
+function contaMoeda(id){
+  const c = contas.find(c=> c.id === id);
+  return c ? c.moeda : null;
+}
+function populateContaFieldSelect(){
+  const sel = document.getElementById('fConta');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Sem conta específica</option>';
+  contas.forEach(conta=>{
+    const opt = document.createElement('option');
+    opt.value = conta.id; opt.textContent = conta.nome;
+    sel.appendChild(opt);
+  });
+  if(contas.some(c=> c.id === current)) sel.value = current;
+}
+document.getElementById('fConta').addEventListener('change', updateValorPrefix);
+
+// ---------- prefixo do campo Valor (segue a moeda da conta selecionada) ----------
+function updateValorPrefix(){
+  const tipo = document.getElementById('fTipo').value;
+  let moeda = 'BRL';
+  if(tipo === 'Transferencia'){
+    moeda = contaMoeda(document.getElementById('fContaOrigem').value) || 'BRL';
+  } else {
+    const contaId = document.getElementById('fConta').value;
+    if(contaId) moeda = contaMoeda(contaId) || 'BRL';
+  }
+  const info = MOEDA_INFO[moeda] || MOEDA_INFO.BRL;
+  document.getElementById('addValorPrefix').textContent = info.simbolo;
+}
+// ---------- conversão de moeda na transferência ----------
+function updateConversionField(){
+  const field = document.getElementById('camposConversao');
+  const preview = document.getElementById('conversionPreview');
+  const origemId = document.getElementById('fContaOrigem').value;
+  const destinoId = document.getElementById('fContaDestino').value;
+  const moedaOrigem = contaMoeda(origemId);
+  const moedaDestino = contaMoeda(destinoId);
+
+  if(!moedaOrigem || !moedaDestino || moedaOrigem === moedaDestino){
+    field.hidden = true;
+    preview.textContent = '';
+    return;
+  }
+  const infoOrigem = MOEDA_INFO[moedaOrigem] || MOEDA_INFO.BRL;
+  const infoDestino = MOEDA_INFO[moedaDestino] || MOEDA_INFO.BRL;
+  document.getElementById('conversionLabel').textContent = `Taxa de conversão (1 ${moedaOrigem} = ? ${moedaDestino})`;
+  field.hidden = false;
+  updateConversionPreview();
+}
+function updateConversionPreview(){
+  const preview = document.getElementById('conversionPreview');
+  const origemId = document.getElementById('fContaOrigem').value;
+  const destinoId = document.getElementById('fContaDestino').value;
+  const moedaOrigem = contaMoeda(origemId);
+  const moedaDestino = contaMoeda(destinoId);
+  if(!moedaOrigem || !moedaDestino || moedaOrigem === moedaDestino) return;
+
+  const infoOrigem = MOEDA_INFO[moedaOrigem] || MOEDA_INFO.BRL;
+  const infoDestino = MOEDA_INFO[moedaDestino] || MOEDA_INFO.BRL;
+  const valor = parseFloat(document.getElementById('fValor').value) || 0;
+  const taxa = parseFloat(document.getElementById('fTaxaConversao').value) || 0;
+  if(valor > 0 && taxa > 0){
+    const convertido = valor * taxa;
+    preview.textContent = `${infoOrigem.simbolo} ${valor.toLocaleString('pt-BR',{minimumFractionDigits:2})} → ${infoDestino.simbolo} ${convertido.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+  } else {
+    preview.textContent = `Informe a taxa para ver o valor convertido em ${infoDestino.label}.`;
+  }
+}
+document.getElementById('fContaDestino').addEventListener('change', updateConversionField);
+document.getElementById('fTaxaConversao').addEventListener('input', updateConversionPreview);
+document.getElementById('fValor').addEventListener('input', updateConversionPreview);
+
 function contaNome(id){
   const c = contas.find(c=> c.id === id);
   return c ? c.nome : 'Conta removida';
@@ -901,16 +1139,19 @@ function openAddSheet(tipo){
   addSheetBand.classList.toggle('transferencia', isTransferencia);
 
   document.getElementById('camposCategoria').hidden = isTransferencia;
+  document.getElementById('camposConta').hidden = isTransferencia;
   document.getElementById('camposTransferencia').hidden = !isTransferencia;
   document.getElementById('camposRepetir').hidden = isTransferencia;
   document.getElementById('repeatUntilField').hidden = true;
   const avisoContas = document.getElementById('transferAvisoContas');
+  document.getElementById('fTaxaConversao').value = '';
   if(isTransferencia){
     populateContaSelects();
-    avisoContas.hidden = contas.length >= 2;
+    avisoContas.hidden = existeParDeContasMesmaMoeda();
   } else {
     avisoContas.hidden = true;
     populateCategoriaSelect();
+    populateContaFieldSelect();
   }
 
   setQuickDate('hoje');
@@ -919,6 +1160,7 @@ function openAddSheet(tipo){
   document.getElementById('fValor').value = '';
   document.getElementById('fValor').closest('.add-valor-row').classList.remove('error');
   document.getElementById('formMsg').textContent = '';
+  updateValorPrefix();
 
   addSheet.classList.add('open');
   addOverlay.classList.add('open');
@@ -939,7 +1181,8 @@ addOverlay.addEventListener('click', closeAddSheet);
 const THEME_KEY = 'tema';
 
 function applyTheme(theme){
-  document.documentElement.setAttribute('data-theme', theme === 'escuro' ? 'dark' : 'light');
+  const attr = theme === 'escuro' ? 'dark' : (theme === 'vidro' ? 'glass' : 'light');
+  document.documentElement.setAttribute('data-theme', attr);
   document.querySelectorAll('.theme-option').forEach(btn=>{
     const isActive = btn.dataset.theme === theme;
     btn.classList.toggle('active', isActive);
@@ -1302,6 +1545,7 @@ document.getElementById('periodApplyBtn').addEventListener('click', ()=>{
   await loadTransactions();
   await loadContas();
   renderAccountList();
+  updateContaBtnLabel();
   render();
   updateFooter();
 })();
